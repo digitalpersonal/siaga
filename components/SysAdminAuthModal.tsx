@@ -1,0 +1,172 @@
+
+import React, { useState } from 'react';
+import { supabase } from '../utils/supabase';
+
+interface SysAdminAuthModalProps {
+    onClose: () => void;
+}
+
+const ShieldCheckIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-indigo-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+);
+
+const XIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+);
+
+export const SysAdminAuthModal: React.FC<SysAdminAuthModalProps> = ({ onClose }) => {
+    const [isLogin, setIsLogin] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [name, setName] = useState('');
+    const [masterKey, setMasterKey] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Hardcoded master key for demonstration purposes. 
+    // In a real scenario, validate this via an Edge Function or RLS logic if possible, 
+    // though client-side restriction prevents accidental signups.
+    const EXPECTED_MASTER_KEY = "SIAGA-MASTER-2024";
+
+    const handleAuth = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError(null);
+        setLoading(true);
+
+        try {
+            if (isLogin) {
+                const { error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
+                if (error) throw error;
+                onClose();
+            } else {
+                // Registration Logic
+                if (masterKey !== EXPECTED_MASTER_KEY) {
+                    throw new Error("Chave Mestra inválida. Acesso negado.");
+                }
+
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            name: name || 'Administrador Geral',
+                            role: 'admin', // This grants admin privileges
+                            whatsapp: '',
+                            imageUrl: `https://ui-avatars.com/api/?name=${name}&background=4f46e5&color=fff`
+                        },
+                    },
+                });
+
+                if (error) throw error;
+                alert("Administrador Geral cadastrado com sucesso!");
+                onClose();
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-stone-900/90 z-[100] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
+            <div className="bg-stone-800 rounded-2xl shadow-2xl w-full max-w-md p-8 relative border border-stone-700">
+                <button onClick={onClose} className="absolute top-4 right-4 text-stone-500 hover:text-stone-300 transition-colors">
+                    <XIcon />
+                </button>
+
+                <div className="flex flex-col items-center text-center mb-6">
+                    <ShieldCheckIcon />
+                    <h2 className="text-2xl font-bold text-white">SysAdmin Access</h2>
+                    <p className="text-stone-400 text-sm mt-2">Área restrita para manutenção e gestão global do sistema.</p>
+                </div>
+
+                {error && (
+                    <div className="bg-red-900/50 border border-red-800 text-red-200 p-3 rounded-lg mb-6 text-sm text-center">
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleAuth} className="space-y-4">
+                    {!isLogin && (
+                        <div>
+                            <label className="block text-stone-400 text-xs font-bold uppercase mb-1">Nome do Administrador</label>
+                            <input 
+                                type="text" 
+                                value={name} 
+                                onChange={e => setName(e.target.value)} 
+                                className="w-full bg-stone-700 border border-stone-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+                                placeholder="Nome Completo"
+                            />
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-stone-400 text-xs font-bold uppercase mb-1">Email Corporativo</label>
+                        <input 
+                            type="email" 
+                            required 
+                            value={email} 
+                            onChange={e => setEmail(e.target.value)} 
+                            className="w-full bg-stone-700 border border-stone-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+                            placeholder="admin@sistema.com"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-stone-400 text-xs font-bold uppercase mb-1">Senha</label>
+                        <input 
+                            type="password" 
+                            required 
+                            value={password} 
+                            onChange={e => setPassword(e.target.value)} 
+                            className="w-full bg-stone-700 border border-stone-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+                            placeholder="••••••••"
+                        />
+                    </div>
+
+                    {!isLogin && (
+                        <div className="pt-2 border-t border-stone-700 mt-2">
+                            <label className="block text-indigo-400 text-xs font-bold uppercase mb-1 flex justify-between">
+                                Chave Mestra de Segurança
+                                <span className="normal-case font-normal opacity-70">(Obrigatório)</span>
+                            </label>
+                            <input 
+                                type="password" 
+                                required 
+                                value={masterKey} 
+                                onChange={e => setMasterKey(e.target.value)} 
+                                className="w-full bg-stone-900 border border-indigo-900/50 rounded-lg px-4 py-2 text-indigo-100 focus:outline-none focus:border-indigo-500 placeholder-indigo-900/50"
+                                placeholder="Chave de Acesso SysAdmin"
+                            />
+                        </div>
+                    )}
+
+                    <button 
+                        type="submit" 
+                        disabled={loading}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-indigo-900/20 mt-4"
+                    >
+                        {loading ? 'Processando...' : (isLogin ? 'Acessar Painel' : 'Registrar Administrador')}
+                    </button>
+                </form>
+
+                <div className="mt-6 text-center">
+                    <button 
+                        onClick={() => { setIsLogin(!isLogin); setError(null); }}
+                        className="text-stone-500 hover:text-white text-sm transition-colors"
+                    >
+                        {isLogin ? 'Não possui cadastro? Criar conta Admin' : 'Já possui conta? Fazer Login'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
