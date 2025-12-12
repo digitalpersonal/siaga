@@ -1,9 +1,77 @@
+
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://awtmbbjldxbikrfgaxma.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF3dG1iYmpsZHhiaWtyZmdheG1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI4OTg2MTMsImV4cCI6MjA3ODQ3NDYxM30.rV0dclu_OnVmr-LqvndDKy1W2Hna_wXMYJNqoNxcsbc';
+// --- Safe Environment Access ---
+// Helper to safely get env vars without crashing if import.meta is undefined
+const getEnv = (key: string): string | undefined => {
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      // @ts-ignore
+      return import.meta.env[key];
+    }
+  } catch (e) {
+    // Ignore errors in environments where import.meta is not supported
+  }
+  return undefined;
+};
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
+
+// Check configuration status
+const isConfigured = !!supabaseUrl && !!supabaseAnonKey;
+
+// --- Mock Client ---
+// Used when Supabase credentials are missing to allow the UI to function for demo purposes.
+const createMockClient = () => {
+    console.warn('⚠️ SUPABASE NOT CONFIGURED: Running in Mock Mode. Data will not be persisted.');
+    console.warn('To fix this, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.');
+    
+    // Chainable mock object that mimics Supabase query builder
+    const mockChain: any = {
+        select: () => mockChain,
+        eq: () => mockChain,
+        neq: () => mockChain,
+        gte: () => mockChain,
+        lte: () => mockChain,
+        in: () => mockChain,
+        order: () => mockChain,
+        limit: () => mockChain,
+        single: async () => ({ data: null, error: null }),
+        insert: async () => ({ data: null, error: null }),
+        update: async () => ({ select: () => ({ single: async () => ({ data: null, error: null }) }) }),
+        delete: async () => ({ error: null }),
+        // Allow the chain to be awaited directly to return a list result (empty array for mock)
+        then: (resolve: (value: any) => void) => Promise.resolve({ data: [], error: null }).then(resolve)
+    };
+
+    return {
+        auth: {
+            getSession: async () => ({ data: { session: null }, error: null }),
+            onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+            signInWithPassword: async () => ({ error: { message: 'Modo Demo: Configure o Supabase para fazer login.' } }),
+            signUp: async () => ({ error: { message: 'Modo Demo: Configure o Supabase para cadastrar.' } }),
+            signOut: async () => ({ error: null }),
+        },
+        from: () => mockChain,
+        storage: {
+            from: () => ({
+                upload: async () => ({ data: null, error: null }),
+                getPublicUrl: () => ({ data: { publicUrl: 'https://via.placeholder.com/150' } })
+            })
+        },
+        channel: () => ({
+            on: () => ({ subscribe: () => {} })
+        }),
+        removeChannel: () => {}
+    } as any;
+};
+
+// Export the client (Real or Mock)
+export const supabase = isConfigured 
+    ? createClient(supabaseUrl!, supabaseAnonKey!) 
+    : createMockClient();
 
 // --- UI Helper Functions ---
 
