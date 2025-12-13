@@ -19,18 +19,10 @@ const XIcon = () => (
 );
 
 export const SysAdminAuthModal: React.FC<SysAdminAuthModalProps> = ({ onClose }) => {
-    const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [name, setName] = useState('');
-    const [masterKey, setMasterKey] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    // Hardcoded master key for demonstration purposes. 
-    // In a real scenario, validate this via an Edge Function or RLS logic if possible, 
-    // though client-side restriction prevents accidental signups.
-    const EXPECTED_MASTER_KEY = "SIAGA-MASTER-2024";
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -38,38 +30,18 @@ export const SysAdminAuthModal: React.FC<SysAdminAuthModalProps> = ({ onClose })
         setLoading(true);
 
         try {
-            if (isLogin) {
-                const { error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password,
-                });
-                if (error) throw error;
-                onClose();
-            } else {
-                // Registration Logic
-                if (masterKey !== EXPECTED_MASTER_KEY) {
-                    throw new Error("Chave Mestra inválida. Acesso negado.");
-                }
-
-                const { error } = await supabase.auth.signUp({
-                    email,
-                    password,
-                    options: {
-                        data: {
-                            name: name || 'Administrador Geral',
-                            role: 'admin', // This grants admin privileges
-                            whatsapp: '',
-                            imageUrl: `https://ui-avatars.com/api/?name=${name}&background=4f46e5&color=fff`
-                        },
-                    },
-                });
-
-                if (error) throw error;
-                alert("Administrador Geral cadastrado com sucesso!");
-                onClose();
-            }
+            const { error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+            
+            if (error) throw error;
+            
+            // Login bem-sucedido
+            onClose();
+            
         } catch (err: any) {
-            setError(err.message);
+            setError("Credenciais inválidas ou erro de conexão.");
         } finally {
             setLoading(false);
         }
@@ -84,8 +56,8 @@ export const SysAdminAuthModal: React.FC<SysAdminAuthModalProps> = ({ onClose })
 
                 <div className="flex flex-col items-center text-center mb-6">
                     <ShieldCheckIcon />
-                    <h2 className="text-2xl font-bold text-white">SysAdmin Access</h2>
-                    <p className="text-stone-400 text-sm mt-2">Área restrita para manutenção e gestão global do sistema.</p>
+                    <h2 className="text-2xl font-bold text-white">Acesso Administrativo</h2>
+                    <p className="text-stone-400 text-sm mt-2">Área restrita para gestão global do sistema.</p>
                 </div>
 
                 {error && (
@@ -95,19 +67,6 @@ export const SysAdminAuthModal: React.FC<SysAdminAuthModalProps> = ({ onClose })
                 )}
 
                 <form onSubmit={handleAuth} className="space-y-4">
-                    {!isLogin && (
-                        <div>
-                            <label className="block text-stone-400 text-xs font-bold uppercase mb-1">Nome do Administrador</label>
-                            <input 
-                                type="text" 
-                                value={name} 
-                                onChange={e => setName(e.target.value)} 
-                                className="w-full bg-stone-700 border border-stone-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
-                                placeholder="Nome Completo"
-                            />
-                        </div>
-                    )}
-
                     <div>
                         <label className="block text-stone-400 text-xs font-bold uppercase mb-1">Email Corporativo</label>
                         <input 
@@ -132,40 +91,14 @@ export const SysAdminAuthModal: React.FC<SysAdminAuthModalProps> = ({ onClose })
                         />
                     </div>
 
-                    {!isLogin && (
-                        <div className="pt-2 border-t border-stone-700 mt-2">
-                            <label className="block text-indigo-400 text-xs font-bold uppercase mb-1 flex justify-between">
-                                Chave Mestra de Segurança
-                                <span className="normal-case font-normal opacity-70">(Obrigatório)</span>
-                            </label>
-                            <input 
-                                type="password" 
-                                required 
-                                value={masterKey} 
-                                onChange={e => setMasterKey(e.target.value)} 
-                                className="w-full bg-stone-900 border border-indigo-900/50 rounded-lg px-4 py-2 text-indigo-100 focus:outline-none focus:border-indigo-500 placeholder-indigo-900/50"
-                                placeholder="Chave de Acesso SysAdmin"
-                            />
-                        </div>
-                    )}
-
                     <button 
                         type="submit" 
                         disabled={loading}
                         className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-indigo-900/20 mt-4"
                     >
-                        {loading ? 'Processando...' : (isLogin ? 'Acessar Painel' : 'Registrar Administrador')}
+                        {loading ? 'Verificando...' : 'Acessar Painel'}
                     </button>
                 </form>
-
-                <div className="mt-6 text-center">
-                    <button 
-                        onClick={() => { setIsLogin(!isLogin); setError(null); }}
-                        className="text-stone-500 hover:text-white text-sm transition-colors"
-                    >
-                        {isLogin ? 'Não possui cadastro? Criar conta Admin' : 'Já possui conta? Fazer Login'}
-                    </button>
-                </div>
             </div>
         </div>
     );

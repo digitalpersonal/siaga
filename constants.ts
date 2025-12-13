@@ -1,3 +1,4 @@
+
 import type { Service, Plan } from './types';
 
 // Category 1: Consultas Médicas
@@ -6,8 +7,9 @@ export const medicalServices: Service[] = [
     { id: 'm2', name: 'Pediatria', duration: 20, price: 0, locationType: 'local' },
     { id: 'm3', name: 'Ginecologia/Obstetrícia', duration: 30, price: 0, locationType: 'local' },
     { id: 'm4', name: 'Saúde da Família', duration: 30, price: 0, locationType: 'local' },
-    { id: 'm5', name: 'Cardiologia (Encaminhamento)', duration: 30, price: 0, locationType: 'external' }, // Exemplo de serviço em outra cidade
-    { id: 'm6', name: 'Oncologia (Tratamento)', duration: 60, price: 0, locationType: 'external' },
+    { id: 'm5', name: 'Cardiologia (Encaminhamento)', duration: 30, price: 0, locationType: 'external', destinationCity: 'Poços de Caldas' },
+    { id: 'm6', name: 'Oncologia (Tratamento)', duration: 60, price: 0, locationType: 'external', destinationCity: 'Alfenas' },
+    { id: 'm7', name: 'Oftalmologia', duration: 30, price: 0, locationType: 'external', destinationCity: 'Mococa' },
 ];
 
 // Category 2: Odontologia
@@ -16,7 +18,7 @@ export const dentalServices: Service[] = [
     { id: 'd2', name: 'Limpeza e Aplicação de Flúor', duration: 40, price: 0, locationType: 'local' },
     { id: 'd3', name: 'Restauração Simples', duration: 60, price: 0, locationType: 'local' },
     { id: 'd4', name: 'Urgência Odontológica', duration: 40, price: 0, locationType: 'local' },
-    { id: 'd5', name: 'Cirurgia Buco-Maxilo', duration: 60, price: 0, locationType: 'external' },
+    { id: 'd5', name: 'Cirurgia Buco-Maxilo', duration: 60, price: 0, locationType: 'external', destinationCity: 'Alfenas' },
 ];
 
 // Category 3: Prevenção e Enfermagem
@@ -34,11 +36,11 @@ export const examServices: Service[] = [
     { id: 'e2', name: 'Raio-X Simples', duration: 20, price: 0, locationType: 'local' },
     { id: 'e3', name: 'Ultrassonografia (Agendada)', duration: 30, price: 0, locationType: 'local' },
     { id: 'e4', name: 'Eletrocardiograma', duration: 20, price: 0, locationType: 'local' },
-    { id: 'e5', name: 'Ressonância Magnética (Transporte)', duration: 60, price: 0, locationType: 'external' },
-    { id: 'e6', name: 'Tomografia Computadorizada (Transporte)', duration: 45, price: 0, locationType: 'external' },
+    { id: 'e5', name: 'Ressonância Magnética', duration: 60, price: 0, locationType: 'external', destinationCity: 'Poços de Caldas' },
+    { id: 'e6', name: 'Tomografia Computadorizada', duration: 45, price: 0, locationType: 'external', destinationCity: 'São Sebastião do Paraíso' },
 ];
 
-// Health Units in the Municipality
+// Health Units in the Municipality (Local)
 export const HEALTH_UNITS = [
     "UBS Centro (Postão)",
     "PSF Vila Nova",
@@ -49,6 +51,30 @@ export const HEALTH_UNITS = [
     "CAPS - Centro de Atenção Psicossocial",
     "Laboratório Municipal"
 ];
+
+// External Facilities mapped by City
+export const EXTERNAL_FACILITIES: { [city: string]: string[] } = {
+    'Poços de Caldas': [
+        "Hospital da Santa Casa",
+        "Hospital Unimed",
+        "Clínica de Olhos Sul de Minas",
+        "Centro de Oncologia",
+        "Clínica de Imagem (Ressonância)"
+    ],
+    'Alfenas': [
+        "Hospital Universitário Alzira Velano",
+        "Santa Casa de Alfenas",
+        "Centro de Especialidades Odontológicas"
+    ],
+    'Mococa': [
+        "Hospital e Maternidade",
+        "Clínica Oftalmológica Regional"
+    ],
+    'São Sebastião do Paraíso': [
+        "Santa Casa de Misericórdia",
+        "Hospital Regional do Coração"
+    ]
+};
 
 export const plans: Plan[] = [
   {

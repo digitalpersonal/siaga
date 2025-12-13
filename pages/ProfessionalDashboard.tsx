@@ -1,11 +1,11 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { ProfessionalUser, Appointment, Service, Specialty } from '../types';
 import { supabase, getInitials, getColor } from '../utils/supabase';
 import { ProfessionalCalendar } from '../components/ProfessionalCalendar';
 import { QuickBookModal } from '../components/QuickBookModal';
+import { generateDailyAgenda } from '../utils/pdfGenerator';
 
-interface ProfessionalDashboardProps {
+export interface ProfessionalDashboardProps {
     user: ProfessionalUser;
     onProfileUpdate: (updatedFields: Partial<ProfessionalUser>) => void;
 }
@@ -14,6 +14,7 @@ interface ProfessionalDashboardProps {
 const CalendarIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
 );
+const PrinterIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>;
 const CogIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066 2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
 );
@@ -60,11 +61,6 @@ const ChartBarIcon = () => (
 const DownloadIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-    </svg>
-);
-const XIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
     </svg>
 );
 
@@ -119,9 +115,10 @@ const DayDetailPanel: React.FC<{
     selectedDate: Date;
     appointments: Appointment[];
     settings: ProfessionalUser['settings'];
+    professionalName: string;
     onClose: () => void;
     onAppointmentUpdate: (updatedAppointment: Appointment) => void;
-}> = ({ selectedDate, appointments, settings, onClose, onAppointmentUpdate }) => {
+}> = ({ selectedDate, appointments, settings, professionalName, onClose, onAppointmentUpdate }) => {
     
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
@@ -143,6 +140,10 @@ const DayDetailPanel: React.FC<{
             onAppointmentUpdate(data);
         }
         setLoadingAction(null);
+    };
+
+    const handlePrintAgenda = () => {
+        generateDailyAgenda(professionalName, selectedDate, appointments.sort((a,b) => a.time.localeCompare(b.time)));
     };
 
     const timeSlots = useMemo(() => {
@@ -169,6 +170,14 @@ const DayDetailPanel: React.FC<{
                 </h3>
                 <button onClick={onClose} aria-label="Fechar painel de detalhes do dia" className="text-stone-500 hover:text-stone-800 p-1 rounded-full hover:bg-stone-100 transition-colors text-2xl font-bold leading-none">&times;</button>
             </div>
+            
+            <button 
+                onClick={handlePrintAgenda}
+                className="w-full mb-4 bg-stone-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center hover:bg-stone-800 transition-colors shadow-sm"
+            >
+                <PrinterIcon /> <span className="ml-2">Imprimir Agenda do Dia</span>
+            </button>
+
             <div className="bg-stone-50 p-3 rounded-lg text-center mb-4">
                 <p className="font-semibold text-stone-700">
                     {appointments.length > 0
@@ -354,95 +363,6 @@ const ServiceEditor: React.FC<{ services: Service[]; userId: string; onServicesU
     );
 };
 
-const TimeSlotBlockingModal: React.FC<{
-    date: Date;
-    settings: ProfessionalUser['settings'];
-    onClose: () => void;
-    onSave: (blockedSlots: string[]) => void;
-    appointments: Appointment[];
-}> = ({ date, settings, onClose, onSave, appointments }) => {
-    const dateStr = date.toISOString().split('T')[0];
-    const initialBlockedSlots = settings.blockedTimeSlots?.[dateStr] || [];
-    const [blockedSlots, setBlockedSlots] = useState<string[]>(initialBlockedSlots);
-
-    const timeSlots = useMemo(() => {
-        const slots = [];
-        if (!settings.workHours) return [];
-        const start = parseInt(settings.workHours.start.split(':')[0]);
-        const end = parseInt(settings.workHours.end.split(':')[0]);
-        for (let i = start; i < end; i++) {
-            slots.push(`${String(i).padStart(2, '0')}:00`);
-            slots.push(`${String(i).padStart(2, '0')}:30`);
-        }
-        return slots;
-    }, [settings.workHours]);
-
-    const toggleSlot = (time: string) => {
-        if (blockedSlots.includes(time)) {
-            setBlockedSlots(prev => prev.filter(t => t !== time));
-        } else {
-            setBlockedSlots(prev => [...prev, time]);
-        }
-    };
-
-    const handleSave = () => {
-        onSave(blockedSlots);
-    };
-
-    const isBooked = (time: string) => {
-        return appointments.some(a => a.time.startsWith(time));
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative flex flex-col max-h-[90vh]">
-                <button onClick={onClose} aria-label="Fechar" className="absolute top-4 right-4 text-stone-500 hover:text-stone-800 transition-colors"><XIcon /></button>
-                
-                <h3 className="text-xl font-bold text-stone-800 mb-2">Bloquear Horários</h3>
-                <p className="text-stone-500 text-sm mb-4">
-                    Selecione os horários que deseja bloquear para o dia <strong>{date.toLocaleDateString('pt-BR')}</strong>.
-                </p>
-
-                <div className="flex-grow overflow-y-auto pr-2 mb-4">
-                    <div className="grid grid-cols-4 gap-2">
-                        {timeSlots.map(time => {
-                            const booked = isBooked(time);
-                            const blocked = blockedSlots.includes(time);
-                            return (
-                                <button
-                                    key={time}
-                                    disabled={booked}
-                                    onClick={() => toggleSlot(time)}
-                                    className={`p-2 rounded-lg text-sm font-semibold transition-all border
-                                        ${booked 
-                                            ? 'bg-teal-100 text-teal-800 border-teal-200 cursor-not-allowed opacity-60' 
-                                            : blocked 
-                                                ? 'bg-red-500 text-white border-red-600 shadow-inner' 
-                                                : 'bg-white text-stone-700 border-stone-200 hover:border-teal-500 hover:bg-stone-50'}
-                                    `}
-                                >
-                                    {time}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                <div className="flex justify-between items-center text-xs text-stone-500 mb-4 px-2">
-                    <div className="flex items-center"><span className="w-3 h-3 bg-white border border-stone-300 rounded mr-1"></span> Disponível</div>
-                    <div className="flex items-center"><span className="w-3 h-3 bg-red-500 rounded mr-1"></span> Bloqueado</div>
-                    <div className="flex items-center"><span className="w-3 h-3 bg-teal-100 rounded mr-1"></span> Agendado</div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t border-stone-100">
-                    <button onClick={onClose} className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-lg font-medium transition-colors">Cancelar</button>
-                    <button onClick={handleSave} className="px-6 py-2 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 transition-colors shadow-md">Salvar Bloqueios</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 const AvailabilityManager: React.FC<{ 
     user: ProfessionalUser,
     appointmentsByDate: Map<string, Appointment[]>,
@@ -451,7 +371,6 @@ const AvailabilityManager: React.FC<{
     const [localSettings, setLocalSettings] = useState<ProfessionalUser['settings']>(user.settings);
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
 
     const isToday = (day: Date) => {
         const today = new Date();
@@ -471,7 +390,7 @@ const AvailabilityManager: React.FC<{
         return days;
     }, [currentMonth, daysInMonth, startingDay]);
     
-    // Time slots for selected day - used for list display
+    // Time slots for selected day
     const timeSlots = useMemo(() => {
         const slots = [];
         const { workHours } = localSettings;
@@ -500,17 +419,22 @@ const AvailabilityManager: React.FC<{
         setLocalSettings({ ...localSettings, blockedDays: newBlockedDays });
     };
 
-    // Updated handler for modal save
-    const handleTimeModalSave = (newBlockedSlots: string[]) => {
+    const toggleBlockTimeSlot = (time: string) => {
         const dateStr = selectedDate.toISOString().split('T')[0];
+        const blockedSlotsForDay = localSettings.blockedTimeSlots?.[dateStr] || [];
+        const isBlocked = blockedSlotsForDay.includes(time);
+        
+        const newBlockedSlotsForDay = isBlocked
+            ? blockedSlotsForDay.filter(t => t !== time)
+            : [...blockedSlotsForDay, time];
+
         setLocalSettings({
             ...localSettings,
             blockedTimeSlots: {
                 ...localSettings.blockedTimeSlots,
-                [dateStr]: newBlockedSlots
+                [dateStr]: newBlockedSlotsForDay
             }
         });
-        setIsTimeModalOpen(false);
     };
     
      const handleSaveChanges = async () => {
@@ -529,7 +453,6 @@ const AvailabilityManager: React.FC<{
     };
 
     const isDayBlocked = localSettings.blockedDays.includes(selectedDate.toISOString().split('T')[0]);
-    const appointmentsForSelectedDay = appointmentsByDate.get(selectedDate.toISOString().split('T')[0]) || [];
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-md">
@@ -562,56 +485,33 @@ const AvailabilityManager: React.FC<{
                 {/* Time Slot View for Selected Day */}
                 <div>
                     <h4 className="text-xl font-bold text-stone-700 mb-3">{selectedDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</h4>
-                    
-                    <div className="flex flex-col gap-2 mb-4">
-                        <button onClick={() => toggleBlockDay(selectedDate)} className={`w-full py-2 px-4 rounded-lg transition-colors font-semibold ${isDayBlocked ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            {isDayBlocked ? 'Desbloquear dia inteiro' : 'Bloquear dia inteiro'}
-                        </button>
-                        
-                        <button 
-                            onClick={() => setIsTimeModalOpen(true)}
-                            disabled={isDayBlocked}
-                            className="w-full py-2 px-4 rounded-lg transition-colors bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
-                        >
-                            <CogIcon /> Gerenciar Horários Específicos
-                        </button>
-                    </div>
-
+                     <button onClick={() => toggleBlockDay(selectedDate)} className={`w-full py-2 px-4 rounded-lg transition-colors mb-4 ${isDayBlocked ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {isDayBlocked ? 'Desbloquear este dia' : 'Bloquear dia inteiro'}
+                    </button>
                     <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
                          {isDayBlocked ? (
-                            <p className="text-center text-stone-500 p-4 bg-stone-50 rounded-lg">Este dia está totalmente bloqueado.</p>
+                            <p className="text-center text-stone-500 p-4 bg-stone-50 rounded-lg">Este dia está bloqueado.</p>
                         ) : timeSlots.map(time => {
                             const appointment = getAppointmentForSlot(time);
                             const isBlocked = localSettings.blockedTimeSlots?.[selectedDate.toISOString().split('T')[0]]?.includes(time);
 
                             if (appointment) {
-                                return <div key={time} className="p-2 rounded bg-teal-50 text-teal-700 border border-teal-100 text-sm"><strong>{time}</strong> - Agendado com {appointment.client_name}</div>
-                            }
-
-                            if (isBlocked) {
-                                return <div key={time} className="p-2 rounded bg-stone-100 text-stone-500 border border-stone-200 text-sm flex items-center"><BlockedIcon /><span className="line-through">{time} - Bloqueado</span></div>
+                                return <div key={time} className="p-2 rounded bg-teal-50 text-teal-700"><strong>{time}</strong> - Agendado com {appointment.client_name}</div>
                             }
 
                             return (
-                                <div key={time} className="p-2 rounded bg-white border border-stone-100 text-stone-600 text-sm">
-                                    {time} - Disponível
+                                <div key={time} className="flex justify-between items-center p-2 rounded bg-white hover:bg-stone-50">
+                                    <span className={isBlocked ? 'text-stone-400 line-through' : 'text-stone-700'}>{time}</span>
+                                    <button onClick={() => toggleBlockTimeSlot(time)} className={`text-xs font-semibold py-1 px-2 rounded ${isBlocked ? 'bg-stone-200 text-stone-600' : 'bg-stone-100 text-stone-500'}`}>
+                                        {isBlocked ? 'Desbloquear' : 'Bloquear'}
+                                    </button>
                                 </div>
                             )
                         })}
                     </div>
                 </div>
             </div>
-            <button onClick={handleSaveChanges} className="mt-8 bg-teal-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-teal-700 transition-colors shadow-md">Salvar Alterações</button>
-            
-            {isTimeModalOpen && (
-                <TimeSlotBlockingModal
-                    date={selectedDate}
-                    settings={localSettings}
-                    appointments={appointmentsForSelectedDay}
-                    onClose={() => setIsTimeModalOpen(false)}
-                    onSave={handleTimeModalSave}
-                />
-            )}
+            <button onClick={handleSaveChanges} className="mt-8 bg-teal-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-teal-700 transition-colors">Salvar Alterações</button>
         </div>
     );
 };
@@ -628,7 +528,6 @@ const ProfileSettings: React.FC<{
         name: user.name,
         specialties: user.specialties || [],
         whatsapp: user.whatsapp || '',
-        bio: user.bio || '',
     });
     const [newSpecialtyName, setNewSpecialtyName] = useState('');
     const [newSpecialtyPrice, setNewSpecialtyPrice] = useState('');
@@ -649,7 +548,7 @@ const ProfileSettings: React.FC<{
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setProfileData(prev => ({ ...prev, [name]: value }));
     };
@@ -753,7 +652,6 @@ const ProfileSettings: React.FC<{
                 name: profileData.name,
                 specialty: profileData.specialties,
                 whatsapp: profileData.whatsapp,
-                bio: profileData.bio,
             })
             .eq('id', user.id);
 
@@ -832,21 +730,6 @@ const ProfileSettings: React.FC<{
                                 <label htmlFor="name" className="block text-sm font-medium text-stone-600 mb-1">Nome Completo</label>
                                 <input id="name" name="name" type="text" value={profileData.name} onChange={handleInputChange} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300" />
                             </div>
-                            
-                            <div>
-                                <label htmlFor="bio" className="block text-sm font-medium text-stone-600 mb-1">Biografia / Apresentação</label>
-                                <textarea
-                                    id="bio"
-                                    name="bio"
-                                    value={profileData.bio}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300"
-                                    rows={3}
-                                    placeholder="Fale um pouco sobre sua experiência e especialidades..."
-                                />
-                                <p className="text-xs text-stone-500 mt-1">Essa descrição aparecerá para os pacientes no momento do agendamento.</p>
-                            </div>
-
                            <div>
                                 <label className="block text-sm font-medium text-stone-600 mb-1">Especialidades</label>
                                 <div className="border rounded-lg p-2 space-y-2">
@@ -899,7 +782,6 @@ const ProfileSettings: React.FC<{
         </div>
     );
 };
-
 
 const AppointmentHistory: React.FC<{
     appointments: Appointment[];
@@ -1148,7 +1030,6 @@ const ProfessionalReports: React.FC<{
     );
 };
 
-
 type Tab = 'agenda' | 'history' | 'services' | 'availability' | 'settings' | 'reports';
 
 export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ user, onProfileUpdate }) => {
@@ -1278,6 +1159,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ us
                                     selectedDate={selectedDate}
                                     appointments={appointmentsForSelectedDate}
                                     settings={localUser.settings}
+                                    professionalName={localUser.name}
                                     onClose={() => setSelectedDate(null)}
                                     onAppointmentUpdate={handleAppointmentUpdate}
                                 />

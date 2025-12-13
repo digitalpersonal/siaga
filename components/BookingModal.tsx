@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Professional, Service, User, ProfessionalUser, Appointment, ProfessionalSettings, Specialty } from '../types';
 import { supabase } from '../utils/supabase';
-import { medicalServices, dentalServices, nursingServices, examServices, DEFAULT_TRANSPORT_CAPACITY, HEALTH_UNITS } from '../constants';
+import { medicalServices, dentalServices, nursingServices, examServices, DEFAULT_TRANSPORT_CAPACITY, HEALTH_UNITS, EXTERNAL_FACILITIES } from '../constants';
 
 interface BookingModalProps {
     professional?: Professional | null;
@@ -82,6 +82,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
     const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(professional || null);
     const [selectedSpecialty, setSelectedSpecialty] = useState<Specialty | null>(null);
     const [selectedUnit, setSelectedUnit] = useState<string | null>(null); // New state for Health Unit
+    const [externalProfessionalName, setExternalProfessionalName] = useState(''); // Only for external
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -218,6 +219,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
              setError("Por favor, selecione a Unidade de Saúde.");
              return;
         }
+        
+        // Ensure destination unit is selected for external services
+        if (selectedService.locationType === 'external' && !selectedUnit) {
+             setError("Por favor, selecione o local de atendimento na cidade destino.");
+             return;
+        }
 
         setIsSubmitting(true);
         setError(null);
@@ -270,9 +277,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
             status: 'upcoming' as const,
             // Transport and Location fields
             locationType: selectedService.locationType || 'local',
-            healthUnit: selectedService.locationType === 'local' ? selectedUnit : 'Externo',
+            healthUnit: selectedUnit, // Now stores either Local Unit OR External Hospital
+            destinationCity: selectedService.destinationCity, // For external
+            externalProfessional: externalProfessionalName, // Name of doctor at destination
             hasCompanion: hasCompanion,
-            transportStatus: 'pending'
+            transportStatus: selectedService.locationType === 'local' ? null : 'pending' // Only pending if transport needed
         };
 
         const { error } = await supabase.from('appointments').insert([appointmentData]);
@@ -377,23 +386,18 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
         if (selectedProfessional) {
             if (category) {
                  const categoryServicesNames = (servicesByCategory[category] || []).map(s => s.name);
-                 // Check if professional explicitly lists services. If not, check if we should fallback to category defaults 
-                 // (only if the pro doesn't have custom services defined, implying they do 'standard' category work)
                  const proServices = selectedProfessional.services || [];
                  
                  if (proServices.length > 0) {
                      services = proServices.filter(s => categoryServicesNames.includes(s.name));
-                     // Fallback: if intersection is empty, show all pro services (maybe category name mismatch)
                      if (services.length === 0) services = proServices;
                  } else {
-                     // Fallback for pros with no services defined but listed in category
                      services = servicesByCategory[category] || [];
                  }
             } else {
                 services = selectedProfessional.services || [];
             }
         } else {
-             // Should not happen in new flow, but safe fallback
              services = category && servicesByCategory[category] ? servicesByCategory[category] : [];
         }
 
@@ -421,7 +425,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
                                 <span className="font-semibold text-stone-800">{service.name}</span>
                                 <div className="flex items-center gap-2">
                                      {service.locationType === 'external' && (
-                                        <span className="text-amber-600 bg-amber-50 px-2 py-1 rounded text-xs font-semibold border border-amber-200">Outra Cidade</span>
+                                        <span className="text-amber-600 bg-amber-50 px-2 py-1 rounded text-xs font-semibold border border-amber-200">
+                                            {service.destinationCity ? `Em ${service.destinationCity}` : 'Outra Cidade'}
+                                        </span>
                                      )}
                                     <span className="text-teal-600 font-medium bg-teal-50 px-2 py-1 rounded text-xs">{formatPrice(service.price)}</span>
                                 </div>
@@ -439,10 +445,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
         );
     };
 
-    // Nova Etapa: Seleção de Unidade (apenas se for local E o profissional NÃO tiver unidade fixa)
+    // Nova Etapa: Seleção de Unidade (Local ou Externa)
     const renderSelectUnit = () => {
-        if (selectedProfessional?.settings?.assignedUnit) return null;
-
         const showSpecialtyStep = (selectedProfessional?.specialties?.length || 0) > 1;
         let stepNumber;
         if (isServiceLedFlow) {
@@ -451,30 +455,64 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
              stepNumber = showSpecialtyStep ? 3 : 2;
         }
 
-        // Skip if external
-        if (selectedService?.locationType === 'external') {
+        const isExternal = selectedService?.locationType === 'external';
+        
+        // Skip if local AND professional has fixed unit (already auto-selected in logic, but UI skip needed)
+        if (!isExternal && selectedProfessional?.settings?.assignedUnit) {
             setStep(s => s + 1);
-            return null; 
+            return null;
         }
+
+        const locationList = isExternal 
+            ? (selectedService?.destinationCity ? EXTERNAL_FACILITIES[selectedService.destinationCity] || [] : [])
+            : HEALTH_UNITS;
+
+        const title = isExternal ? `Local do Exame em ${selectedService?.destinationCity}` : "Selecione a Unidade de Saúde";
+        const subtitle = isExternal ? "Selecione onde o procedimento será realizado." : "Escolha em qual Posto de Saúde você deseja ser atendido.";
 
         return (
             <div>
-                <h3 className="text-xl font-semibold mb-4 text-stone-700">{stepNumber}. Selecione a Unidade</h3>
-                <p className="text-sm text-stone-500 mb-4">Escolha em qual Posto de Saúde você deseja ser atendido.</p>
+                <h3 className="text-xl font-semibold mb-4 text-stone-700">{stepNumber}. {title}</h3>
+                <p className="text-sm text-stone-500 mb-4">{subtitle}</p>
                 
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                    {HEALTH_UNITS.map((unit) => (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 mb-4">
+                    {locationList.map((unit) => (
                         <div 
                             key={unit} 
-                            onClick={() => { setSelectedUnit(unit); setStep(s => s + 1); }} 
-                            className="p-4 border rounded-lg cursor-pointer transition-all duration-200 border-stone-200 hover:bg-stone-50 hover:border-teal-500 flex items-center"
+                            onClick={() => { setSelectedUnit(unit); }} 
+                            className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 flex items-center ${selectedUnit === unit ? 'border-teal-500 bg-teal-50 ring-1 ring-teal-500' : 'border-stone-200 hover:bg-stone-50 hover:border-teal-500'}`}
                         >
-                            <div className="p-2 bg-teal-100 rounded-full text-teal-600 mr-3">
-                                <LocationIcon />
+                            <div className={`p-2 rounded-full mr-3 ${isExternal ? 'bg-amber-100 text-amber-600' : 'bg-teal-100 text-teal-600'}`}>
+                                {isExternal ? <LocationIcon /> : <LocationIcon />}
                             </div>
                             <span className="font-semibold text-stone-800">{unit}</span>
                         </div>
                     ))}
+                    {locationList.length === 0 && <p className="text-stone-500 text-sm">Nenhum local cadastrado para esta cidade.</p>}
+                </div>
+
+                {isExternal && (
+                    <div className="mt-4">
+                        <label className="block text-sm font-semibold text-stone-600 mb-1">Nome do Médico/Profissional (Opcional)</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-2 border border-stone-300 rounded-lg text-sm"
+                            placeholder="Ex: Dr. Silva"
+                            value={externalProfessionalName}
+                            onChange={(e) => setExternalProfessionalName(e.target.value)}
+                        />
+                        <p className="text-xs text-stone-400 mt-1">Caso saiba o nome do especialista que irá atender.</p>
+                    </div>
+                )}
+
+                <div className="mt-6 flex justify-end">
+                     <button 
+                        onClick={() => setStep(s => s + 1)} 
+                        disabled={!selectedUnit}
+                        className="bg-teal-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Continuar
+                    </button>
                 </div>
             </div>
         );
@@ -490,13 +528,16 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
         
         // Dynamic Step Counting
         let stepCount = 1; 
-        if (isServiceLedFlow) stepCount++; // Pro select
-        if (showSpecialtyStep) stepCount++; // Specialty
-        if (isLocal && !hasFixedUnit) stepCount++; // Unit select
+        if (isServiceLedFlow) stepCount++; 
+        if (showSpecialtyStep) stepCount++; 
+        // Unit selection step counts for both explicit local select AND external select
+        if (!isLocal || !hasFixedUnit) stepCount++; 
+
+        const title = selectedService?.locationType === 'external' ? "Data e Hora do Exame" : "Selecione Data e Hora";
 
         return (
             <div>
-                <h3 className="text-xl font-semibold mb-4 text-stone-700">{stepCount}. Selecione Data e Hora</h3>
+                <h3 className="text-xl font-semibold mb-4 text-stone-700">{stepCount}. {title}</h3>
                 <input 
                     type="date" 
                     min={minDate} 
@@ -509,22 +550,40 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
                     }} 
                     className="w-full p-2 border border-stone-300 rounded-lg mb-4 focus:ring-2 focus:ring-teal-500 focus:outline-none" 
                 />
-                {loadingAvailability ? <p className="text-stone-500">Verificando disponibilidade na agenda...</p> : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                        {timeSlots.length > 0 ? timeSlots.map(time => (
-                            <button 
-                                key={time} 
-                                onClick={() => {
-                                    setSelectedTime(time);
-                                    setJustSelectedTime(time);
-                                    setTimeout(() => setJustSelectedTime(null), 300);
-                                }} 
-                                className={`p-2 rounded-lg transition-colors duration-200 text-sm font-medium ${selectedTime === time ? 'bg-teal-600 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-700'} ${justSelectedTime === time ? 'animate-pop' : ''}`}
-                            >
-                                {time}
-                            </button>
-                        )) : <p className="text-stone-500 col-span-full text-center bg-stone-50 p-4 rounded">Nenhum horário disponível para esta data.</p>}
+                
+                {selectedService?.locationType === 'external' ? (
+                    <div>
+                        <label className="block text-sm font-semibold text-stone-600 mb-2">Horário do Procedimento:</label>
+                        <input 
+                            type="time" 
+                            className="w-full p-3 border border-stone-300 rounded-lg text-lg font-bold text-stone-800"
+                            value={selectedTime || ''}
+                            onChange={(e) => setSelectedTime(e.target.value)}
+                        />
+                        <p className="text-xs text-stone-500 mt-2 bg-amber-50 p-2 rounded border border-amber-100">
+                            Informe o horário exato agendado para o seu exame/consulta na outra cidade. O transporte será organizado com base nisso.
+                        </p>
                     </div>
+                ) : (
+                    <>
+                        {loadingAvailability ? <p className="text-stone-500">Verificando disponibilidade na agenda...</p> : (
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                {timeSlots.length > 0 ? timeSlots.map(time => (
+                                    <button 
+                                        key={time} 
+                                        onClick={() => {
+                                            setSelectedTime(time);
+                                            setJustSelectedTime(time);
+                                            setTimeout(() => setJustSelectedTime(null), 300);
+                                        }} 
+                                        className={`p-2 rounded-lg transition-colors duration-200 text-sm font-medium ${selectedTime === time ? 'bg-teal-600 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-700'} ${justSelectedTime === time ? 'animate-pop' : ''}`}
+                                    >
+                                        {time}
+                                    </button>
+                                )) : <p className="text-stone-500 col-span-full text-center bg-stone-50 p-4 rounded">Nenhum horário disponível para esta data.</p>}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         );
@@ -538,10 +597,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
         let stepCount = 1;
         if (isServiceLedFlow) stepCount++;
         if (showSpecialtyStep) stepCount++;
-        if (isLocal && !hasFixedUnit) stepCount++;
+        if (!isLocal || !hasFixedUnit) stepCount++;
         stepCount++; // For the Date step we just passed
 
-        const isExternalService = selectedService?.locationType === 'external';
+        const isExternal = selectedService?.locationType === 'external';
 
         return (
             <div>
@@ -554,31 +613,52 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
                 )}
                 
                 <div className="bg-stone-50 p-4 rounded-lg space-y-3 border border-stone-200">
-                    <div><p className="text-xs uppercase tracking-wide text-stone-500">Profissional / Unidade</p><p className="font-semibold text-stone-800">{selectedProfessional?.name}</p></div>
+                    <div><p className="text-xs uppercase tracking-wide text-stone-500">Solicitante</p><p className="font-semibold text-stone-800">{user.name}</p></div>
+                    
+                    {isLocal ? (
+                        <div><p className="text-xs uppercase tracking-wide text-stone-500">Profissional / Unidade</p><p className="font-semibold text-stone-800">{selectedProfessional?.name}</p></div>
+                    ) : (
+                        <div><p className="text-xs uppercase tracking-wide text-stone-500">Agendamento TFD</p><p className="font-semibold text-stone-800">Transporte Fora de Domicílio</p></div>
+                    )}
+
                     {selectedSpecialty && (
                         <div><p className="text-xs uppercase tracking-wide text-stone-500">Especialidade</p><p className="font-semibold text-teal-700">{selectedSpecialty.name}</p></div>
                     )}
-                    {isLocal && selectedUnit && (
-                        <div className="bg-teal-100/50 p-2 rounded -mx-2 px-2"><p className="text-xs uppercase tracking-wide text-teal-700">Local de Atendimento</p><p className="font-bold text-teal-800 flex items-center"><LocationIcon /> <span className="ml-1">{selectedUnit}</span></p></div>
+                    
+                    {selectedUnit && (
+                        <div className={`p-2 rounded -mx-2 px-2 ${isExternal ? 'bg-amber-100/50' : 'bg-teal-100/50'}`}>
+                            <p className={`text-xs uppercase tracking-wide ${isExternal ? 'text-amber-700' : 'text-teal-700'}`}>
+                                {isExternal ? 'Local do Exame (Destino)' : 'Local de Atendimento'}
+                            </p>
+                            <p className={`font-bold flex items-center ${isExternal ? 'text-amber-800' : 'text-teal-800'}`}>
+                                <LocationIcon /> 
+                                <span className="ml-1">
+                                    {selectedUnit} 
+                                    {isExternal && selectedService?.destinationCity && ` (${selectedService.destinationCity})`}
+                                </span>
+                            </p>
+                            {externalProfessionalName && <p className="text-xs text-stone-600 mt-1 ml-6">Prof: {externalProfessionalName}</p>}
+                        </div>
                     )}
+
                     <div>
                         <p className="text-xs uppercase tracking-wide text-stone-500">Procedimento</p>
                         <p className="font-semibold text-stone-800 flex items-center">
                             {selectedService?.name}
-                            {isExternalService && <span className="ml-2 text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">Transporte Necessário</span>}
+                            {isExternal && <span className="ml-2 text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">Transporte Necessário</span>}
                         </p>
                     </div>
                     <div><p className="text-xs uppercase tracking-wide text-stone-500">Data e Hora</p><p className="font-semibold text-stone-800">{selectedDate.toLocaleDateString('pt-BR')} às {selectedTime}</p></div>
                     <div className="border-t pt-2 mt-2"><p className="text-xs uppercase tracking-wide text-stone-500">Valor</p><p className="font-bold text-lg text-teal-700">{formatPrice(selectedService?.price || 0)}</p></div>
                 </div>
 
-                {isExternalService && (
+                {isExternal ? (
                     <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                          <div className="flex items-start">
                              <div className="mr-3 mt-1"><BusIcon /></div>
                              <div>
                                  <h4 className="font-semibold text-amber-800 text-sm">Transporte Intermunicipal</h4>
-                                 <p className="text-xs text-amber-700 mt-1">Este serviço é realizado em outra cidade. O transporte será fornecido pela prefeitura.</p>
+                                 <p className="text-xs text-amber-700 mt-1">Este serviço é realizado em outra cidade. O transporte será fornecido pela prefeitura. Aguarde confirmação do horário de saída.</p>
                              </div>
                          </div>
                          <div className="mt-3 flex items-center bg-white p-2 rounded border border-amber-200">
@@ -591,9 +671,17 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
                             />
                              <label htmlFor="companion-check" className="ml-2 text-sm font-medium text-stone-700 cursor-pointer select-none">
                                  Vou precisar de acompanhante?
-                                 <span className="block text-xs text-stone-500 font-normal">Marque apenas se for estritamente necessário para garantir lugar no veículo. Ocupará uma vaga extra.</span>
+                                 <span className="block text-xs text-stone-500 font-normal">Marque apenas se for estritamente necessário.</span>
                              </label>
                          </div>
+                    </div>
+                ) : (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                        <p className="text-sm text-blue-800 font-medium text-center">
+                            Atenção: Este é um atendimento local.
+                            <br/>
+                            <span className="font-normal text-blue-700">Não há transporte da prefeitura. Compareça à unidade por conta própria.</span>
+                        </p>
                     </div>
                 )}
             </div>
@@ -605,14 +693,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
             if (!selectedService || !selectedDate || !selectedTime || !selectedProfessional) return;
             
             const dateFormatted = selectedDate.toLocaleDateString('pt-BR');
-            const unitInfo = selectedUnit ? `\n📍 *Local:* ${selectedUnit}` : '';
+            const unitInfo = selectedUnit ? `\n📍 *Local:* ${selectedUnit} ${selectedService.destinationCity ? '('+selectedService.destinationCity+')' : ''}` : '';
             const companionInfo = hasCompanion ? '\n👥 *Acompanhante:* Sim' : '';
-            const transportInfo = selectedService.locationType === 'external' ? '\n🚌 *Transporte:* Incluído (Chegar 30min antes)' : '';
+            const transportInfo = selectedService.locationType === 'external' ? '\n🚌 *Transporte:* Incluído (Aguarde contato com horário de saída)' : '';
+            const extProfInfo = externalProfessionalName ? `\n👨‍⚕️ *Profissional no Destino:* ${externalProfessionalName}` : '';
 
-            const message = `*SIAGA - Confirmação de Agendamento* ✅\n\nOlá, ${user.name.split(' ')[0]}! Seu agendamento foi realizado com sucesso.\n\n👨‍⚕️ *Profissional:* ${selectedProfessional.name}\n💉 *Serviço:* ${selectedService.name}${unitInfo}\n🗓️ *Data:* ${dateFormatted}\n⏰ *Horário:* ${selectedTime}${transportInfo}${companionInfo}\n\nRecomendamos chegar com 15 minutos de antecedência.`;
+            const message = `*SIAGA - Confirmação de Agendamento* ✅\n\nOlá, ${user.name.split(' ')[0]}! Seu agendamento foi realizado com sucesso.\n\n🩺 *Serviço:* ${selectedService.name}${unitInfo}${extProfInfo}\n🗓️ *Data:* ${dateFormatted}\n⏰ *Horário do Exame:* ${selectedTime}${transportInfo}${companionInfo}\n\n`;
 
             const encodedMessage = encodeURIComponent(message);
-            // Try to open a chat with self if number is available, else just open whatsapp with text pre-filled
             const targetPhone = user.whatsapp ? `55${user.whatsapp.replace(/\D/g, '')}` : '';
             const url = `https://wa.me/${targetPhone}?text=${encodedMessage}`;
             window.open(url, '_blank');
@@ -623,18 +711,26 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
                 <CheckCircleIcon />
                 <h3 className="text-2xl font-bold text-stone-800 mt-4">Agendamento Confirmado!</h3>
                 <p className="text-stone-600 mt-2">Seu horário de saúde foi reservado com sucesso.</p>
+                
                 {selectedService?.locationType === 'local' && (
                     <p className="text-teal-700 font-bold mt-2 bg-teal-50 p-2 rounded inline-block border border-teal-100">
                         Compareça na: {selectedUnit}
                     </p>
                 )}
+                
                 {selectedService?.locationType === 'external' && (
-                     <p className="text-amber-600 text-sm mt-2 font-medium bg-amber-50 p-2 rounded border border-amber-100 inline-block">
-                         Chegue 30 minutos antes no ponto de embarque.
-                         {hasCompanion ? ' Seu acompanhante está confirmado.' : ''}
-                     </p>
+                     <div className="mt-4 text-left bg-amber-50 p-4 rounded border border-amber-100">
+                         <p className="text-amber-800 font-bold text-sm text-center mb-2">Instruções de Viagem</p>
+                         <ul className="text-xs text-amber-700 list-disc pl-4 space-y-1">
+                             <li>Seu exame é em <strong>{selectedUnit}</strong> ({selectedService.destinationCity}).</li>
+                             <li>Horário do exame: <strong>{selectedTime}</strong>.</li>
+                             <li>A prefeitura organizará o transporte.</li>
+                             <li>Chegue ao ponto de embarque com antecedência (consulte o motorista).</li>
+                         </ul>
+                     </div>
                 )}
-                <p className="text-stone-500 text-sm mt-1">A confirmação foi enviada para o seu WhatsApp cadastrado.</p>
+                
+                <p className="text-stone-500 text-sm mt-4">A confirmação foi enviada para o seu WhatsApp cadastrado.</p>
                 
                 <button 
                     onClick={handleSendWhatsapp}
@@ -670,8 +766,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({ professional, catego
         // 3. Service selection
         flow.push(renderSelectService);
         
-        // 4. Unit selection (only if local AND professional does NOT have a fixed unit)
-        if (isLocal && !hasFixedUnit) flow.push(renderSelectUnit);
+        // 4. Unit selection (Used for Local if no fixed unit, OR External Destination selection)
+        if ((isLocal && !hasFixedUnit) || selectedService?.locationType === 'external') flow.push(renderSelectUnit);
         
         // 5. Date/Time
         flow.push(renderSelectDateTime);

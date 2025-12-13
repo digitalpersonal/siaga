@@ -5,6 +5,7 @@ export interface Service {
   duration: number; // in minutes
   price: number;
   locationType?: 'local' | 'external'; // external = outra cidade
+  destinationCity?: string; // Ex: "Poços de Caldas" (Only for external)
 }
 
 export interface Specialty {
@@ -82,6 +83,46 @@ export interface DriverUser extends User {
   role: 'driver';
 }
 
+// --- Novas Entidades de Logística e Infra ---
+
+export interface Vehicle {
+  id: string;
+  name: string; // Ex: Van Ducato 01
+  plate: string; // Placa
+  capacity: number; // Lugares
+  type: 'car' | 'van' | 'bus' | 'ambulance';
+}
+
+export interface HealthUnit {
+  id: string;
+  name: string; // Ex: UBS Centro
+  address: string;
+  phone?: string;
+  type: 'ubs' | 'hospital' | 'caps' | 'specialty_center';
+}
+
+export interface DestinationCity {
+  id: string;
+  name: string; // Ex: Poços de Caldas
+  distanceKm: number;
+  estimatedTime: string; // Ex: "1h 30m"
+}
+
+export interface Trip {
+  id: string;
+  date: string;
+  time: string; // Horário de saída
+  destination_id: string;
+  vehicle_id: string;
+  driver_id: string;
+  destination_name: string; // Denormalized for UI
+  vehicle_name: string;     // Denormalized for UI
+  driver_name: string;      // Denormalized for UI
+  capacity: number;
+  passengers_count: number;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+}
+
 export interface Appointment {
   id: string;
   client_id: string; // Added for joining
@@ -100,8 +141,11 @@ export interface Appointment {
   notes?: string;
   // Transport fields
   locationType?: 'local' | 'external';
-  healthUnit?: string; // Nome da Unidade de Saúde (Ex: UBS Centro)
+  healthUnit?: string; // Nome da Unidade Local OU Nome do Hospital Externo
+  destinationCity?: string; // Cidade destino (para externos)
+  externalProfessional?: string; // Nome do médico na outra cidade
   hasCompanion?: boolean;
   transportStatus?: 'pending' | 'present' | 'absent';
-  assignedVehicle?: string; // ID ou Nome do veículo alocado para o dia
+  assignedVehicle?: string; // Legacy field (optional)
+  trip_id?: string; // Link to the specific Trip
 }
