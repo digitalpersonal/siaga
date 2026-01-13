@@ -14,8 +14,14 @@ interface Toast {
 }
 
 const BellIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+);
+
+const AlertIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
     </svg>
 );
 
@@ -182,14 +188,20 @@ export const ReminderSystem: React.FC<ReminderSystemProps> = ({ user }) => {
             {toasts.map(toast => (
                 <div 
                     key={toast.id} 
-                    className={`pointer-events-auto bg-white border-l-4 ${toast.type === 'urgent' ? 'border-red-500' : 'border-rose-500'} shadow-xl rounded-r-lg p-4 flex items-start animate-slide-in relative overflow-hidden`}
+                    className={`pointer-events-auto bg-white border-l-4 ${toast.type === 'urgent' ? 'border-red-500' : 'border-teal-500'} shadow-xl rounded-r-lg p-4 flex items-start animate-slide-in relative overflow-hidden`}
                 >
                     <div className="flex-shrink-0 mr-3 mt-1">
-                        <BellIcon />
+                        {toast.type === 'urgent' ? (
+                            <div className="animate-pulse">
+                                <AlertIcon />
+                            </div>
+                        ) : (
+                            <BellIcon />
+                        )}
                     </div>
                     <div className="flex-grow pr-6">
                         <p className={`font-bold text-sm ${toast.type === 'urgent' ? 'text-red-600' : 'text-stone-800'}`}>
-                            {toast.type === 'urgent' ? 'Começa em breve!' : 'Lembrete de Agendamento'}
+                            {toast.type === 'urgent' ? 'Atenção: Começa em breve!' : 'Lembrete de Agendamento'}
                         </p>
                         <p className="text-stone-600 text-sm mt-1 leading-relaxed">{toast.message}</p>
                     </div>

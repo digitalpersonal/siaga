@@ -1,28 +1,35 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import type { AdminUser, User, ProfessionalUser, Appointment, Trip, Vehicle, DestinationCity, Specialty } from '../types';
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import type { AdminUser, User, Specialty, ProfessionalUser, Appointment } from '../types';
 import { supabase } from '../utils/supabase';
-import { HEALTH_UNITS as DEFAULT_UNITS, HEALTH_UNITS, VEHICLE_CAPACITIES } from '../constants';
-import { generateGeneralReport, generateTFDManifest } from '../utils/pdfGenerator';
 import { QuickBookModal } from '../components/QuickBookModal';
+import { ProfessionalCalendar } from '../components/ProfessionalCalendar';
+import { DayDetailPanel } from '../components/DayDetailPanel';
+import { HEALTH_UNIT_DATA, HEALTH_UNITS } from '../constants';
 
-// --- Icons ---
-const ChartBarIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>;
-const UsersIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197" /></svg>;
-const UserIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>;
-const CalendarIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
-const TruckIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" /></svg>;
-const OfficeBuildingIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>;
-const MapIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>;
-const BusIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>;
-const PlusIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>;
-const XIcon = () => <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
-const TrashIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
-const RefreshIcon = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>;
-const DocumentDownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
-const BellIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>;
+// Icons
+const EyeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>;
+const UsersIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197" /></svg>;
+const UserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>;
+const XIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
+const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
+const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>;
+const BusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>;
+const CheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>;
+const UsersGroupIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
+const ChartBarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>;
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>;
+const ClipboardListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>;
+const SmallXIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>;
+const BellIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>;
+const OfficeBuildingIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+);
 
-// Simple beep sound using Web Audio API
+// Helper function
 const playAlert = () => {
     try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -52,544 +59,6 @@ const playAlert = () => {
     } catch (e) {
         console.error("Audio feedback error", e);
     }
-};
-
-const StatCard: React.FC<{ title: string; value: string | number }> = ({ title, value }) => (
-    <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-teal-500">
-        <h3 className="text-stone-500 text-sm font-semibold uppercase tracking-wider">{title}</h3>
-        <p className="text-3xl font-bold text-stone-800 mt-2">{value}</p>
-    </div>
-);
-
-const DashboardOverview: React.FC = () => {
-    const [stats, setStats] = useState({ users: 0, professionals: 0, appointments: 0, revenue: 0 });
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchStats = async () => {
-            setLoading(true);
-            try {
-                const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-                const { count: profCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'professional');
-                const { count: apptCount, data: apptData } = await supabase.from('appointments').select('price', { count: 'exact' });
-                
-                const totalRevenue = apptData?.reduce((sum, appt) => sum + (appt.price || 0), 0) || 0;
-
-                setStats({
-                    users: userCount ?? 0,
-                    professionals: profCount ?? 0,
-                    appointments: apptCount ?? 0,
-                    revenue: totalRevenue
-                });
-            } catch (error) {
-                console.error("Error fetching stats:", error);
-            }
-            setLoading(false);
-        };
-        fetchStats();
-    }, []);
-
-    // Real-time listener for Dashboard Stats
-    useEffect(() => {
-        const channel = supabase
-            .channel('dashboard-stats')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'appointments' },
-                () => {
-                    // Re-fetch stats on any change
-                    setLoading(true);
-                    supabase.from('appointments').select('price', { count: 'exact' }).then(({ count, data }) => {
-                        const totalRevenue = data?.reduce((sum, appt) => sum + (appt.price || 0), 0) || 0;
-                        setStats(prev => ({
-                            ...prev,
-                            appointments: count ?? 0,
-                            revenue: totalRevenue
-                        }));
-                        setLoading(false);
-                    });
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, []);
-
-    if (loading) return <div className="flex justify-center p-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>;
-
-    return (
-        <div>
-            <h2 className="text-2xl font-bold text-stone-800 mb-6">Visão Geral</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Cidadãos Cadastrados" value={stats.users} />
-                <StatCard title="Corpo Clínico" value={stats.professionals} />
-                <StatCard title="Agendamentos" value={stats.appointments} />
-                <StatCard title="Produção (Est.)" value={`R$ ${stats.revenue.toFixed(0)}`} />
-            </div>
-        </div>
-    );
-};
-
-const LocalQueueManagement: React.FC = () => {
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedUnit, setSelectedUnit] = useState<string | 'all'>('all');
-
-    const fetchQueue = async () => {
-        setLoading(true);
-        // Fetch only upcoming local appointments
-        let query = supabase
-            .from('appointments')
-            .select('*')
-            .eq('locationType', 'local')
-            .eq('status', 'upcoming')
-            .gte('date', new Date().toISOString().split('T')[0]) // From today onwards
-            .order('date', { ascending: true })
-            .order('time', { ascending: true });
-
-        const { data, error } = await query;
-        if (error) console.error("Error fetching local queue:", error);
-        else setAppointments(data || []);
-        setLoading(false);
-    };
-
-    useEffect(() => { fetchQueue(); }, []);
-
-    // Group appointments by Unit
-    const groupedByUnit = useMemo(() => {
-        const groups: Record<string, Appointment[]> = {};
-        DEFAULT_UNITS.forEach(unit => groups[unit] = []); // Initialize with all known units
-        
-        appointments.forEach(appt => {
-            const unit = appt.healthUnit || 'Não Definido';
-            if (!groups[unit]) groups[unit] = [];
-            groups[unit].push(appt);
-        });
-        return groups;
-    }, [appointments]);
-
-    const displayedAppointments = selectedUnit === 'all' 
-        ? appointments 
-        : (groupedByUnit[selectedUnit] || []);
-
-    return (
-        <div className="flex flex-col h-full gap-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-bold text-stone-800">Filas de Atendimento (Local)</h2>
-                    <p className="text-stone-500">Gestão de pacientes agendados para as unidades de saúde municipais.</p>
-                </div>
-                <button onClick={fetchQueue} className="bg-stone-100 text-stone-600 p-2 rounded-lg hover:bg-stone-200">
-                    <RefreshIcon />
-                </button>
-            </div>
-
-            {/* Filter Tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-                <button 
-                    onClick={() => setSelectedUnit('all')}
-                    className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${selectedUnit === 'all' ? 'bg-teal-600 text-white' : 'bg-white text-stone-600 hover:bg-stone-50 border'}`}
-                >
-                    Todas ({appointments.length})
-                </button>
-                {DEFAULT_UNITS.map(unit => {
-                    const count = groupedByUnit[unit]?.length || 0;
-                    return (
-                        <button 
-                            key={unit}
-                            onClick={() => setSelectedUnit(unit)}
-                            className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${selectedUnit === unit ? 'bg-teal-600 text-white' : 'bg-white text-stone-600 hover:bg-stone-50 border'}`}
-                        >
-                            {unit} ({count})
-                        </button>
-                    );
-                })}
-            </div>
-
-            {/* Kanban-like or List View */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {selectedUnit === 'all' ? (
-                    // Dashboard View (Cards per Unit)
-                    DEFAULT_UNITS.map(unit => {
-                        const unitAppts = groupedByUnit[unit] || [];
-                        if (unitAppts.length === 0) return null;
-                        
-                        return (
-                            <div key={unit} className="bg-white p-4 rounded-xl shadow-md border border-stone-100">
-                                <h3 className="font-bold text-teal-800 mb-3 flex items-center">
-                                    <OfficeBuildingIcon /> 
-                                    <span className="ml-2">{unit}</span>
-                                </h3>
-                                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                                    {unitAppts.slice(0, 5).map(appt => (
-                                        <div key={appt.id} className="text-sm border-b pb-2 last:border-0">
-                                            <div className="flex justify-between">
-                                                <span className="font-semibold text-stone-700">{appt.time}</span>
-                                                <span className="text-xs text-stone-500">{new Date(appt.date).toLocaleDateString()}</span>
-                                            </div>
-                                            <div className="text-stone-800 font-medium">{appt.client_name}</div>
-                                            <div className="text-stone-500 text-xs">{appt.service_name}</div>
-                                            <div className="text-stone-400 text-xs mt-0.5">Prof: {appt.professional_name}</div>
-                                        </div>
-                                    ))}
-                                    {unitAppts.length > 5 && (
-                                        <div className="text-center text-xs text-stone-500 pt-2 font-medium">
-                                            + {unitAppts.length - 5} outros pacientes
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })
-                ) : (
-                    // Detailed List View for Selected Unit
-                    <div className="col-span-full bg-white p-6 rounded-xl shadow-md">
-                        <h3 className="text-xl font-bold text-stone-800 mb-4 flex items-center">
-                            Lista de Espera: {selectedUnit}
-                        </h3>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-stone-200">
-                                <thead className="bg-stone-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-stone-500 uppercase">Data/Hora</th>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-stone-500 uppercase">Paciente</th>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-stone-500 uppercase">Serviço/Especialidade</th>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-stone-500 uppercase">Profissional</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-stone-200">
-                                    {displayedAppointments.map(appt => (
-                                        <tr key={appt.id} className="hover:bg-stone-50">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-stone-900 font-mono">
-                                                {new Date(appt.date).toLocaleDateString()} <strong>{appt.time}</strong>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-stone-900">
-                                                {appt.client_name}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-stone-600">
-                                                {appt.service_name}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-stone-500">
-                                                {appt.professional_name}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {displayedAppointments.length === 0 && (
-                                        <tr><td colSpan={4} className="px-6 py-8 text-center text-stone-500">Nenhum paciente na fila desta unidade.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-const TripManagement: React.FC = () => {
-    const [trips, setTrips] = useState<Trip[]>([]);
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-    const [drivers, setDrivers] = useState<User[]>([]);
-    const [destinations, setDestinations] = useState<DestinationCity[]>([]);
-    const [pendingAppointments, setPendingAppointments] = useState<Appointment[]>([]);
-    
-    const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    
-    // Create Trip Form
-    const [newTripData, setNewTripData] = useState({ date: '', time: '', destination_id: '', vehicle_id: '', driver_id: '' });
-
-    const fetchData = async () => {
-        // Fetch Trips
-        const { data: tripData } = await supabase.from('trips').select('*').order('date', { ascending: true });
-        setTrips(tripData || []);
-
-        // Fetch Resources
-        const { data: vData } = await supabase.from('vehicles').select('*');
-        setVehicles(vData || []);
-        
-        const { data: dData } = await supabase.from('profiles').select('*').eq('role', 'driver');
-        setDrivers(dData || []);
-
-        const { data: cData } = await supabase.from('destinations').select('*');
-        setDestinations(cData || []);
-
-        // Fetch Pending External Appointments
-        fetchPendingAppointments();
-    };
-
-    const fetchPendingAppointments = async () => {
-        const { data } = await supabase
-            .from('appointments')
-            .select('*')
-            .eq('locationType', 'external')
-            .is('trip_id', null) // Not yet assigned
-            .neq('status', 'cancelled')
-            .order('date', { ascending: true });
-        setPendingAppointments(data || []);
-    };
-
-    useEffect(() => { fetchData(); }, []);
-
-    const handleCreateTrip = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const vehicle = vehicles.find(v => v.id === newTripData.vehicle_id);
-        const driver = drivers.find(d => d.id === newTripData.driver_id);
-        const destination = destinations.find(d => d.id === newTripData.destination_id);
-
-        if (!vehicle || !driver || !destination) return;
-
-        const newTrip = {
-            id: crypto.randomUUID(),
-            date: newTripData.date,
-            time: newTripData.time,
-            destination_id: destination.id,
-            vehicle_id: vehicle.id,
-            driver_id: driver.id,
-            destination_name: destination.name,
-            vehicle_name: vehicle.name,
-            driver_name: driver.name,
-            capacity: vehicle.capacity,
-            passengers_count: 0,
-            status: 'scheduled'
-        };
-
-        const { error } = await supabase.from('trips').insert([newTrip]);
-        if (!error) {
-            setTrips([...trips, newTrip as any]);
-            setShowCreateModal(false);
-            setNewTripData({ date: '', time: '', destination_id: '', vehicle_id: '', driver_id: '' });
-        }
-    };
-
-    const handleAssignPatient = async (appointment: Appointment, trip: Trip) => {
-        // Calculate passengers (Patient + Companion)
-        const paxToAdd = 1 + (appointment.hasCompanion ? 1 : 0);
-        
-        if (trip.passengers_count + paxToAdd > trip.capacity) {
-            alert(`Capacidade excedida! Veículo só tem ${trip.capacity - trip.passengers_count} lugares livres.`);
-            return;
-        }
-
-        // Optimistic update
-        const updatedTrip = { ...trip, passengers_count: trip.passengers_count + paxToAdd };
-        setTrips(trips.map(t => t.id === trip.id ? updatedTrip : t));
-        setPendingAppointments(prev => prev.filter(a => a.id !== appointment.id));
-        if (selectedTrip?.id === trip.id) setSelectedTrip(updatedTrip);
-
-        // DB Update
-        await supabase.from('appointments').update({ trip_id: trip.id }).eq('id', appointment.id);
-        await supabase.from('trips').update({ passengers_count: updatedTrip.passengers_count }).eq('id', trip.id);
-    };
-
-    const handleRemovePatient = async (appointment: Appointment) => {
-        if (!selectedTrip) return;
-        const paxToRemove = 1 + (appointment.hasCompanion ? 1 : 0);
-        
-        // Update Trip Local
-        const updatedTrip = { ...selectedTrip, passengers_count: selectedTrip.passengers_count - paxToRemove };
-        setTrips(trips.map(t => t.id === selectedTrip.id ? updatedTrip : t));
-        setSelectedTrip(updatedTrip);
-        
-        // Update Lists
-        setPendingAppointments([...pendingAppointments, { ...appointment, trip_id: undefined }]);
-        
-        // DB Update
-        await supabase.from('appointments').update({ trip_id: null }).eq('id', appointment.id);
-        await supabase.from('trips').update({ passengers_count: updatedTrip.passengers_count }).eq('id', selectedTrip.id);
-    };
-
-    const [tripPassengers, setTripPassengers] = useState<Appointment[]>([]);
-    
-    useEffect(() => {
-        if (selectedTrip) {
-            const loadPassengers = async () => {
-                const { data } = await supabase.from('appointments').select('*').eq('trip_id', selectedTrip.id);
-                setTripPassengers(data || []);
-            };
-            loadPassengers();
-        }
-    }, [selectedTrip]);
-
-    // --- PDF GENERATION ---
-    const handleDownloadManifest = async () => {
-        if (!selectedTrip) return;
-        const { data } = await supabase.from('appointments').select('*').eq('trip_id', selectedTrip.id);
-        if (data) {
-            generateTFDManifest(selectedTrip, data);
-        }
-    };
-
-    return (
-        <div className="flex flex-col h-full gap-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-bold text-stone-800">Gestão de Viagens (TFD)</h2>
-                    <p className="text-stone-500">Planejamento de frota e alocação de pacientes para outras cidades.</p>
-                </div>
-                <button onClick={() => setShowCreateModal(true)} className="bg-stone-800 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow-md hover:bg-stone-900">
-                    <PlusIcon /> <span className="ml-2">Nova Viagem</span>
-                </button>
-            </div>
-
-            <div className="flex flex-col lg:flex-row gap-6 h-full">
-                {/* Left: Scheduled Trips */}
-                <div className="lg:w-1/3 bg-white p-4 rounded-xl shadow-md overflow-hidden flex flex-col h-[600px]">
-                    <h3 className="font-bold text-stone-700 mb-3 flex justify-between items-center">
-                        Viagens Programadas
-                        <button onClick={fetchData}><RefreshIcon /></button>
-                    </h3>
-                    <div className="overflow-y-auto space-y-3 pr-2 flex-grow">
-                        {trips.length === 0 && <p className="text-stone-400 text-sm text-center mt-10">Nenhuma viagem agendada.</p>}
-                        {trips.map(trip => (
-                            <div 
-                                key={trip.id} 
-                                onClick={() => setSelectedTrip(trip)}
-                                className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedTrip?.id === trip.id ? 'border-teal-500 bg-teal-50' : 'border-stone-200 hover:bg-stone-50'}`}
-                            >
-                                <div className="flex justify-between mb-1">
-                                    <span className="font-bold text-stone-800">{new Date(trip.date).toLocaleDateString()}</span>
-                                    <span className="text-sm font-mono bg-stone-200 px-2 rounded">{trip.time}</span>
-                                </div>
-                                <div className="text-sm text-teal-700 font-semibold mb-1 flex items-center"><MapIcon /> <span className="ml-1">{trip.destination_name}</span></div>
-                                <div className="text-xs text-stone-500 mb-2">{trip.vehicle_name} ({trip.driver_name})</div>
-                                {/* Capacity Bar */}
-                                <div className="w-full bg-stone-200 rounded-full h-2.5">
-                                    <div 
-                                        className={`h-2.5 rounded-full ${trip.passengers_count >= trip.capacity ? 'bg-red-500' : 'bg-green-500'}`} 
-                                        style={{ width: `${(trip.passengers_count / trip.capacity) * 100}%` }}
-                                    ></div>
-                                </div>
-                                <div className="flex justify-between text-xs mt-1 text-stone-500">
-                                    <span>{trip.passengers_count} ocupados</span>
-                                    <span>{trip.capacity} total</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Middle: Selected Trip Detail */}
-                <div className="lg:w-1/3 bg-white p-4 rounded-xl shadow-md overflow-hidden flex flex-col h-[600px]">
-                    {selectedTrip ? (
-                        <>
-                            <div className="mb-4 border-b pb-4">
-                                <h3 className="font-bold text-xl text-teal-800">{selectedTrip.destination_name}</h3>
-                                <p className="text-sm text-stone-600">Saída: {new Date(selectedTrip.date).toLocaleDateString()} às {selectedTrip.time}</p>
-                                <p className="text-sm text-stone-600">Veículo: {selectedTrip.vehicle_name} | Mot: {selectedTrip.driver_name}</p>
-                                
-                                <button 
-                                    onClick={handleDownloadManifest}
-                                    className="mt-3 w-full bg-amber-600 text-white text-sm font-bold py-2 rounded flex items-center justify-center hover:bg-amber-700 shadow-sm"
-                                >
-                                    <DocumentDownloadIcon /> <span className="ml-2">Imprimir Manifesto Oficial</span>
-                                </button>
-                            </div>
-                            <h4 className="font-bold text-stone-700 text-sm mb-2">Lista de Passageiros ({tripPassengers.length})</h4>
-                            <div className="overflow-y-auto space-y-2 pr-2 flex-grow">
-                                {tripPassengers.map(p => (
-                                    <div key={p.id} className="flex justify-between items-center p-2 border rounded bg-stone-50 text-sm">
-                                        <div>
-                                            <span className="font-semibold block">{p.client_name}</span>
-                                            {p.hasCompanion && <span className="text-xs text-amber-600 font-bold">+ Acompanhante</span>}
-                                            <span className="text-xs text-stone-400 block">{p.client_address || 'Endereço n/d'}</span>
-                                        </div>
-                                        <button onClick={() => handleRemovePatient(p)} className="text-red-500 hover:text-red-700 p-1"><TrashIcon /></button>
-                                    </div>
-                                ))}
-                                {tripPassengers.length === 0 && <p className="text-stone-400 text-sm text-center">Nenhum passageiro alocado.</p>}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-stone-400">
-                            <BusIcon />
-                            <p className="mt-2">Selecione uma viagem para ver detalhes.</p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Right: Pending Queue */}
-                <div className="lg:w-1/3 bg-stone-100 p-4 rounded-xl border border-stone-200 overflow-hidden flex flex-col h-[600px]">
-                    <h3 className="font-bold text-stone-700 mb-1">Fila de Espera (Transporte)</h3>
-                    <p className="text-xs text-stone-500 mb-3">Pacientes aguardando alocação em veículo.</p>
-                    
-                    <div className="overflow-y-auto space-y-2 pr-2 flex-grow">
-                        {pendingAppointments.map(appt => {
-                            // Only allow adding if selected trip matches date (simple validation)
-                            const canAdd = selectedTrip && new Date(selectedTrip.date).toISOString().split('T')[0] === new Date(appt.date).toISOString().split('T')[0];
-                            
-                            return (
-                                <div key={appt.id} className="bg-white p-3 rounded shadow-sm border-l-4 border-amber-400">
-                                    <div className="flex justify-between">
-                                        <span className="font-bold text-sm">{appt.client_name}</span>
-                                        <span className="text-xs bg-stone-100 px-1 rounded">{new Date(appt.date).toLocaleDateString()}</span>
-                                    </div>
-                                    <div className="text-xs text-stone-600 mt-1 truncate">Dest: {appt.service_name}</div>
-                                    {appt.hasCompanion && <div className="text-xs text-amber-600 font-bold mt-1">+ 1 Acompanhante</div>}
-                                    
-                                    <button 
-                                        disabled={!canAdd}
-                                        onClick={() => selectedTrip && handleAssignPatient(appt, selectedTrip)}
-                                        className={`mt-2 w-full text-xs font-bold py-1 rounded ${canAdd ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}
-                                    >
-                                        {canAdd ? 'Alocar na Viagem Selecionada' : 'Data Incompatível'}
-                                    </button>
-                                </div>
-                            );
-                        })}
-                        {pendingAppointments.length === 0 && <p className="text-stone-400 text-sm text-center mt-10">Fila vazia. Todos alocados.</p>}
-                    </div>
-                </div>
-            </div>
-
-            {/* Create Trip Modal */}
-            {showCreateModal && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                        <h3 className="text-xl font-bold mb-4">Nova Viagem</h3>
-                        <form onSubmit={handleCreateTrip} className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-bold text-stone-500 uppercase">Data</label>
-                                <input type="date" required className="w-full border rounded p-2" value={newTripData.date} onChange={e => setNewTripData({...newTripData, date: e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-stone-500 uppercase">Horário Saída</label>
-                                <input type="time" required className="w-full border rounded p-2" value={newTripData.time} onChange={e => setNewTripData({...newTripData, time: e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-stone-500 uppercase">Destino</label>
-                                <select required className="w-full border rounded p-2 bg-white" value={newTripData.destination_id} onChange={e => setNewTripData({...newTripData, destination_id: e.target.value})}>
-                                    <option value="">Selecione...</option>
-                                    {destinations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-stone-500 uppercase">Veículo</label>
-                                <select required className="w-full border rounded p-2 bg-white" value={newTripData.vehicle_id} onChange={e => setNewTripData({...newTripData, vehicle_id: e.target.value})}>
-                                    <option value="">Selecione...</option>
-                                    {vehicles.map(v => <option key={v.id} value={v.id}>{v.name} ({v.capacity} lug)</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-stone-500 uppercase">Motorista</label>
-                                <select required className="w-full border rounded p-2 bg-white" value={newTripData.driver_id} onChange={e => setNewTripData({...newTripData, driver_id: e.target.value})}>
-                                    <option value="">Selecione...</option>
-                                    {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex justify-end gap-2 pt-4">
-                                <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded">Cancelar</button>
-                                <button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded font-bold hover:bg-teal-700">Criar Viagem</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
 };
 
 const AddProfessionalModal: React.FC<{
@@ -690,12 +159,13 @@ const AddProfessionalModal: React.FC<{
                     whatsapp,
                     imageUrl,
                     bio,
+                    // assignedUnit removed from top level
                     settings: {
                         workHours: { start: '08:00', end: '17:00' }, // Standard UBS hours
                         workDays: [1, 2, 3, 4, 5],
                         blockedDays: [],
                         blockedTimeSlots: {},
-                        assignedUnit: assignedUnit, 
+                        assignedUnit: assignedUnit, // Added here
                     },
                     services: []
                 },
@@ -801,6 +271,311 @@ const AddProfessionalModal: React.FC<{
     );
 };
 
+const StatCard: React.FC<{ title: string; value: string | number }> = ({ title, value }) => (
+    <div className="bg-white p-6 rounded-xl shadow-md">
+        <h3 className="text-stone-500 text-sm font-semibold uppercase">{title}</h3>
+        <p className="text-3xl font-bold text-stone-800 mt-2">{value}</p>
+    </div>
+);
+
+const DashboardOverview: React.FC = () => {
+    const [stats, setStats] = useState({ users: 0, professionals: 0, appointments: 0, revenue: 0 });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            setLoading(true);
+            try {
+                const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+                const { count: profCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'professional');
+                const { count: apptCount, data: apptData } = await supabase.from('appointments').select('price', { count: 'exact' });
+                
+                const totalRevenue = apptData?.reduce((sum, appt) => sum + (appt.price || 0), 0) || 0;
+
+                setStats({
+                    users: userCount ?? 0,
+                    professionals: profCount ?? 0,
+                    appointments: apptCount ?? 0,
+                    revenue: totalRevenue
+                });
+            } catch (error) {
+                console.error("Error fetching stats:", error);
+            }
+            setLoading(false);
+        };
+        fetchStats();
+    }, []);
+
+    // Real-time listener for Dashboard Stats
+    useEffect(() => {
+        const channel = supabase
+            .channel('dashboard-stats')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'appointments' },
+                () => {
+                    // Re-fetch stats on any change
+                    setLoading(true);
+                    supabase.from('appointments').select('price', { count: 'exact' }).then(({ count, data }) => {
+                        const totalRevenue = data?.reduce((sum, appt) => sum + (appt.price || 0), 0) || 0;
+                        setStats(prev => ({
+                            ...prev,
+                            appointments: count ?? 0,
+                            revenue: totalRevenue
+                        }));
+                        setLoading(false);
+                    });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    if (loading) return <p>Carregando estatísticas...</p>;
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard title="Total de Usuários" value={stats.users} />
+            <StatCard title="Profissionais Ativos" value={stats.professionals} />
+            <StatCard title="Agendamentos Realizados" value={stats.appointments} />
+            <StatCard title="Valor Estimado (Produção)" value={`R$ ${stats.revenue.toFixed(2)}`} />
+        </div>
+    );
+};
+
+const ReportsAnalytics: React.FC = () => {
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [alertMessage, setAlertMessage] = useState<string | null>(null);
+    const [startDate, setStartDate] = useState(() => {
+        const date = new Date();
+        date.setDate(1); 
+        return date.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [selectedUnit, setSelectedUnit] = useState('');
+
+    const fetchData = async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('appointments')
+            .select('*')
+            .gte('date', startDate)
+            .lte('date', endDate)
+            .order('date', { ascending: false });
+
+        if (error) console.error("Error fetching report data:", error);
+        else setAppointments(data || []);
+        setLoading(false);
+    };
+
+    useEffect(() => { fetchData(); }, [startDate, endDate]);
+
+    useEffect(() => {
+        const channel = supabase
+            .channel('reports-appointments')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments' }, (payload) => {
+                const newAppt = payload.new as Appointment;
+                if (newAppt.date >= startDate && newAppt.date <= endDate) {
+                    setAppointments(prev => [newAppt, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+                }
+                playAlert();
+                setAlertMessage(`Novo agendamento: ${newAppt.service_name} para ${newAppt.client_name}`);
+                setTimeout(() => setAlertMessage(null), 5000);
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments' }, (payload) => {
+                 setAppointments(prev => prev.map(a => a.id === payload.new.id ? payload.new as Appointment : a));
+            })
+            .subscribe();
+        return () => { supabase.removeChannel(channel); };
+    }, [startDate, endDate]);
+
+    // Filter appointments by selected Unit
+    const filteredAppointments = useMemo(() => {
+        if (!selectedUnit) return appointments;
+        return appointments.filter(appt => appt.healthUnit === selectedUnit);
+    }, [appointments, selectedUnit]);
+
+    const metrics = useMemo(() => {
+        const data = filteredAppointments;
+        const total = data.length;
+        const completed = data.filter(a => a.status === 'completed' || a.transportStatus === 'present').length;
+        const cancelled = data.filter(a => a.status === 'cancelled').length;
+        const noShow = data.filter(a => a.transportStatus === 'absent').length;
+        
+        const serviceCounts: Record<string, number> = {};
+        data.forEach(a => {
+            const name = a.service_name.split('(')[0].trim();
+            serviceCounts[name] = (serviceCounts[name] || 0) + 1;
+        });
+        const topServices = Object.entries(serviceCounts).sort(([, a], [, b]) => b - a).slice(0, 5);
+
+        return { total, completed, cancelled, noShow, topServices };
+    }, [filteredAppointments]);
+
+    const exportCSV = () => {
+        const headers = ["ID", "Data", "Hora", "Paciente", "Profissional", "Serviço", "Local (Unidade)", "Status", "Transporte", "Valor"];
+        const rows = filteredAppointments.map(a => [
+            a.id, a.date, a.time, `"${a.client_name}"`, `"${a.professional_name}"`, `"${a.service_name}"`, `"${a.healthUnit || 'Não informado'}"`, a.status, a.transportStatus || 'N/A', a.price
+        ].join(','));
+        const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n" + rows.join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `relatorio_siaga_${selectedUnit ? selectedUnit.replace(/\s+/g, '_') + '_' : ''}${startDate}_${endDate}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    return (
+        <div className="space-y-6 relative">
+            {alertMessage && (
+                <div className="fixed top-24 right-6 bg-teal-600 text-white px-6 py-4 rounded-lg shadow-2xl z-50 flex items-center animate-bounce">
+                    <BellIcon />
+                    <span className="ml-3 font-bold">{alertMessage}</span>
+                </div>
+            )}
+            <div className="bg-white p-6 rounded-xl shadow-md">
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4">
+                    <h3 className="text-2xl font-bold text-stone-800 flex items-center">
+                        <ChartBarIcon /> <span className="ml-2">Relatórios e Inteligência (BI)</span>
+                    </h3>
+                    <div className="flex flex-col md:flex-row gap-3 items-center w-full xl:w-auto">
+                        
+                        {/* Filtro de Unidade */}
+                        <div className="relative w-full md:w-64">
+                            <select 
+                                value={selectedUnit} 
+                                onChange={e => setSelectedUnit(e.target.value)}
+                                className="w-full pl-3 pr-8 py-2 border border-stone-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none appearance-none"
+                            >
+                                <option value="">Todas as Unidades</option>
+                                {HEALTH_UNIT_DATA.map(u => (
+                                    <option key={u.id} value={u.name}>{u.name}</option>
+                                ))}
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-stone-500">
+                                <OfficeBuildingIcon />
+                            </div>
+                        </div>
+
+                        {/* Filtro de Data */}
+                        <div className="flex items-center gap-2 bg-stone-50 p-1.5 rounded-lg border border-stone-200 w-full md:w-auto">
+                            <span className="text-xs font-bold text-stone-500 ml-1">De:</span>
+                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-white border rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-teal-500" />
+                            <span className="text-xs font-bold text-stone-500">Até:</span>
+                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-white border rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-teal-500" />
+                        </div>
+
+                        <button onClick={exportCSV} className="flex items-center justify-center bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors shadow-sm text-sm whitespace-nowrap w-full md:w-auto">
+                            <DownloadIcon /> CSV
+                        </button>
+                    </div>
+                </div>
+                {loading ? <p className="text-center py-10">Carregando dados...</p> : (
+                    <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <p className="text-blue-600 font-bold text-sm uppercase">Total Agendamentos</p>
+                                <p className="text-3xl font-extrabold text-blue-800">{metrics.total}</p>
+                            </div>
+                            <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                                <p className="text-green-600 font-bold text-sm uppercase">Realizados/Confirmados</p>
+                                <p className="text-3xl font-extrabold text-green-800">{metrics.completed}</p>
+                                <p className="text-xs text-green-600 mt-1">{metrics.total > 0 ? ((metrics.completed / metrics.total) * 100).toFixed(1) : 0}% taxa de comparecimento</p>
+                            </div>
+                            <div className="bg-red-50 p-4 rounded-lg border border-red-100">
+                                <p className="text-red-600 font-bold text-sm uppercase">Faltas / Absenteísmo</p>
+                                <p className="text-3xl font-extrabold text-red-800">{metrics.noShow}</p>
+                                <p className="text-xs text-red-600 mt-1">Impacto direto na eficiência</p>
+                            </div>
+                            <div className="bg-stone-100 p-4 rounded-lg border border-stone-200">
+                                <p className="text-stone-600 font-bold text-sm uppercase">Cancelamentos</p>
+                                <p className="text-3xl font-extrabold text-stone-800">{metrics.cancelled}</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                            <div className="bg-stone-50 p-5 rounded-xl border border-stone-200">
+                                <h4 className="font-bold text-stone-700 mb-4">Serviços Mais Procurados {selectedUnit ? `em ${selectedUnit}` : ''}</h4>
+                                <div className="space-y-3">
+                                    {metrics.topServices.map(([name, count], idx) => (
+                                        <div key={name}>
+                                            <div className="flex justify-between text-sm mb-1">
+                                                <span className="font-medium text-stone-700">{idx + 1}. {name}</span>
+                                                <span className="text-stone-500">{count} atendimentos</span>
+                                            </div>
+                                            <div className="w-full bg-stone-200 rounded-full h-2.5">
+                                                <div className="bg-teal-500 h-2.5 rounded-full" style={{ width: `${(count / (metrics.topServices[0][1] || 1)) * 100}%` }}></div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {metrics.topServices.length === 0 && <p className="text-stone-400 text-sm">Sem dados suficientes.</p>}
+                                </div>
+                            </div>
+                            <div className="bg-stone-50 p-5 rounded-xl border border-stone-200 flex flex-col">
+                                <h4 className="font-bold text-stone-700 mb-4">Auditoria Recente {selectedUnit ? `em ${selectedUnit}` : ''}</h4>
+                                <div className="overflow-y-auto flex-grow max-h-60 pr-2 space-y-2">
+                                    {filteredAppointments.slice(0, 10).map(appt => (
+                                        <div key={appt.id} className="text-sm border-b border-stone-200 pb-2 last:border-0">
+                                            <div className="flex justify-between">
+                                                <span className="font-bold text-stone-700">{appt.client_name}</span>
+                                                <span className="text-stone-500 text-xs">{new Date(appt.date).toLocaleDateString()}</span>
+                                            </div>
+                                            <div className="flex justify-between mt-1">
+                                                <span className="text-stone-600 truncate w-2/3">{appt.service_name}</span>
+                                                <span className={`text-xs px-2 py-0.5 rounded-full ${appt.status === 'completed' ? 'bg-green-100 text-green-700' : appt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    {appt.status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto border rounded-lg">
+                            <table className="min-w-full divide-y divide-stone-200">
+                                <thead className="bg-stone-100">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Data</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Paciente</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Serviço</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Profissional</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-stone-200">
+                                    {filteredAppointments.slice(0, 50).map(appt => (
+                                        <tr key={appt.id} className="hover:bg-stone-50">
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-stone-900">{new Date(appt.date).toLocaleDateString()} <span className="text-stone-400 text-xs">{appt.time}</span></td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-stone-700 font-medium">{appt.client_name}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-stone-600">
+                                                {appt.service_name}
+                                                {appt.healthUnit && <div className="text-xs text-teal-600 mt-0.5">{appt.healthUnit}</div>}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-stone-600">{appt.professional_name}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${appt.status === 'completed' ? 'bg-green-100 text-green-800' : appt.status === 'cancelled' ? 'bg-stone-100 text-stone-800' : 'bg-blue-100 text-blue-800'}`}>
+                                                    {appt.status === 'upcoming' ? 'Agendado' : appt.status}
+                                                </span>
+                                                {appt.transportStatus === 'absent' && <span className="ml-1 text-xs text-red-600 font-bold">(Faltou)</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {filteredAppointments.length > 50 && <div className="p-3 text-center text-sm text-stone-500 bg-stone-50 border-t">Mostrando 50 de {filteredAppointments.length} registros. Use "Exportar CSV" para ver tudo.</div>}
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const ProfessionalManagement: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -812,6 +587,11 @@ const ProfessionalManagement: React.FC = () => {
     // Quick Booking State
     const [selectedProForBooking, setSelectedProForBooking] = useState<ProfessionalUser | null>(null);
     const [appointmentsForSelectedPro, setAppointmentsForSelectedPro] = useState<Appointment[]>([]);
+
+    // Agenda Management State (NEW)
+    const [selectedProForAgenda, setSelectedProForAgenda] = useState<ProfessionalUser | null>(null);
+    const [appointmentsForAgenda, setAppointmentsForAgenda] = useState<Appointment[]>([]);
+    const [selectedDateForAgenda, setSelectedDateForAgenda] = useState<Date | null>(null);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -853,16 +633,11 @@ const ProfessionalManagement: React.FC = () => {
         }
     };
     
+    // Quick Book Logic (Existing)
     const handleOpenQuickBook = async (user: User) => {
         const today = new Date().toISOString().split('T')[0];
         const professionalUser = user as ProfessionalUser;
-        
-        const { data } = await supabase
-            .from('appointments')
-            .select('*')
-            .eq('professional_id', user.id)
-            .eq('date', today);
-            
+        const { data } = await supabase.from('appointments').select('*').eq('professional_id', user.id).eq('date', today);
         setAppointmentsForSelectedPro(data || []);
         setSelectedProForBooking(professionalUser);
     };
@@ -870,6 +645,42 @@ const ProfessionalManagement: React.FC = () => {
     const handleQuickBookSuccess = () => {
         setSelectedProForBooking(null);
     };
+
+    // Agenda Management Logic (NEW)
+    const handleOpenAgenda = async (user: User) => {
+        const professionalUser = user as ProfessionalUser;
+        setSelectedProForAgenda(professionalUser);
+        setSelectedDateForAgenda(new Date()); // Start with today/current view
+        await fetchAppointmentsForAgenda(professionalUser.id);
+    };
+
+    const fetchAppointmentsForAgenda = async (profId: string) => {
+        const { data, error } = await supabase.from('appointments').select('*').eq('professional_id', profId);
+        if(!error) setAppointmentsForAgenda(data || []);
+    };
+
+    // Transform appointments list into Map for Calendar component
+    const appointmentsByDate = useMemo(() => {
+        const map = new Map<string, Appointment[]>();
+        appointmentsForAgenda.forEach(appt => {
+            const dateKey = appt.date;
+            if (!map.has(dateKey)) {
+                map.set(dateKey, []);
+            }
+            map.get(dateKey)!.push(appt);
+        });
+        return map;
+    }, [appointmentsForAgenda]);
+
+    const appointmentsForSelectedDate = useMemo(() => {
+        if (!selectedDateForAgenda) return [];
+        const dateStr = selectedDateForAgenda.toISOString().split('T')[0];
+        return appointmentsByDate.get(dateStr) || [];
+    }, [selectedDateForAgenda, appointmentsByDate]);
+
+    const handleAppointmentUpdate = useCallback((updatedAppointment: Appointment) => {
+        setAppointmentsForAgenda(prev => prev.map(appt => appt.id === updatedAppointment.id ? updatedAppointment : appt));
+    }, []);
     
     const filteredUsers = useMemo(() => 
         users.filter(user =>
@@ -927,11 +738,18 @@ const ProfessionalManagement: React.FC = () => {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-stone-500">{(user as ProfessionalUser).settings?.assignedUnit || 'Não atribuída'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm flex gap-2">
                                     <button 
+                                        onClick={() => handleOpenAgenda(user)}
+                                        className="text-white bg-teal-600 hover:bg-teal-700 px-3 py-1 rounded-md text-xs font-bold transition-colors flex items-center"
+                                        title="Gerenciar Agenda Completa"
+                                    >
+                                        <CalendarIcon /> Gerenciar Agenda
+                                    </button>
+                                    <button 
                                         onClick={() => handleOpenQuickBook(user)}
                                         className="text-teal-600 hover:text-teal-800 p-1 rounded-md hover:bg-teal-50 transition-colors"
                                         title="Agendamento Rápido"
                                     >
-                                        <CalendarIcon />
+                                        <PlusIcon />
                                     </button>
                                     <button 
                                         onClick={() => handleRemoveProfessional(user.id)} 
@@ -947,19 +765,21 @@ const ProfessionalManagement: React.FC = () => {
                 </table>
                  {filteredUsers.length === 0 && <p className="text-center text-stone-500 py-4">Nenhum profissional encontrado.</p>}
             </div>
+            
+            {/* Modals */}
             {isAddModalOpen && (
                 <AddProfessionalModal 
                     onClose={() => setIsAddModalOpen(false)}
                     onSuccess={handleProfessionalAdded}
                 />
             )}
+            
             {isSelectProModalOpen && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative max-h-[80vh] flex flex-col">
                         <button onClick={() => setIsSelectProModalOpen(false)} className="absolute top-4 right-4 text-stone-500 hover:text-stone-800"><XIcon /></button>
                         <h3 className="text-xl font-bold text-stone-800 mb-2">Novo Agendamento</h3>
                         <p className="text-stone-500 text-sm mb-4">Selecione o profissional para realizar o agendamento.</p>
-                        
                         <input 
                             type="text" 
                             placeholder="Buscar profissional..."
@@ -967,7 +787,6 @@ const ProfessionalManagement: React.FC = () => {
                             onChange={e => setProSearchTerm(e.target.value)}
                             className="w-full p-2 border border-stone-300 rounded-lg mb-4 focus:ring-2 focus:ring-teal-500 focus:outline-none"
                         />
-                        
                         <div className="overflow-y-auto flex-grow space-y-2 pr-2">
                             {users.filter(u => u.name.toLowerCase().includes(proSearchTerm.toLowerCase())).map(u => (
                                 <div 
@@ -988,13 +807,11 @@ const ProfessionalManagement: React.FC = () => {
                                     </div>
                                 </div>
                             ))}
-                            {users.filter(u => u.name.toLowerCase().includes(proSearchTerm.toLowerCase())).length === 0 && (
-                                <p className="text-center text-stone-500 py-4">Nenhum profissional encontrado.</p>
-                            )}
                         </div>
                     </div>
                 </div>
             )}
+
             {selectedProForBooking && (
                 <QuickBookModal
                     user={selectedProForBooking}
@@ -1003,6 +820,45 @@ const ProfessionalManagement: React.FC = () => {
                     onBookingSuccess={handleQuickBookSuccess}
                 />
             )}
+
+            {/* FULL AGENDA MANAGEMENT MODAL FOR ADMIN */}
+            {selectedProForAgenda && (
+                <div className="fixed inset-0 bg-stone-900/80 z-[60] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
+                    <div className="bg-stone-100 w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="bg-white p-4 border-b border-stone-200 flex justify-between items-center">
+                            <div>
+                                <h2 className="text-xl font-bold text-stone-800">Gerenciando Agenda: {selectedProForAgenda.name}</h2>
+                                <p className="text-sm text-stone-500">Acesso Administrativo Total</p>
+                            </div>
+                            <button onClick={() => setSelectedProForAgenda(null)} className="text-stone-500 hover:text-stone-800 bg-stone-100 hover:bg-stone-200 p-2 rounded-full transition-colors">
+                                <XIcon />
+                            </button>
+                        </div>
+                        <div className="flex-grow overflow-y-auto p-6">
+                            <div className="flex flex-col lg:flex-row gap-6 h-full">
+                                <div className="flex-grow">
+                                    <ProfessionalCalendar 
+                                        appointmentsByDate={appointmentsByDate}
+                                        onDateSelect={setSelectedDateForAgenda}
+                                        settings={selectedProForAgenda.settings}
+                                    />
+                                </div>
+                                {selectedDateForAgenda && (
+                                    <DayDetailPanel 
+                                        selectedDate={selectedDateForAgenda}
+                                        appointments={appointmentsForSelectedDate}
+                                        settings={selectedProForAgenda.settings}
+                                        professionalName={selectedProForAgenda.name}
+                                        onClose={() => setSelectedDateForAgenda(null)}
+                                        onAppointmentUpdate={handleAppointmentUpdate}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <style>{`
                 @keyframes fade-in {
                     from { opacity: 0; }
@@ -1016,347 +872,40 @@ const ProfessionalManagement: React.FC = () => {
     );
 };
 
-const ReportsAnalytics: React.FC = () => {
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [alertMessage, setAlertMessage] = useState<string | null>(null);
-    const [startDate, setStartDate] = useState(() => {
-        const date = new Date();
-        date.setDate(1); // First day of current month
-        return date.toISOString().split('T')[0];
-    });
-    const [endDate, setEndDate] = useState(() => {
-        const date = new Date();
-        return date.toISOString().split('T')[0]; // Today
-    });
-
-    const fetchData = async () => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('appointments')
-            .select('*')
-            .gte('date', startDate)
-            .lte('date', endDate)
-            .order('date', { ascending: false });
-
-        if (error) {
-            console.error("Error fetching report data:", error);
-        } else {
-            setAppointments(data || []);
-        }
-        setLoading(false);
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, [startDate, endDate]);
-
-    // Real-time listener for Reports
-    useEffect(() => {
-        const channel = supabase
-            .channel('reports-appointments')
-            .on(
-                'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'appointments' },
-                (payload) => {
-                    const newAppt = payload.new as Appointment;
-                    // Check if new appointment falls within date range
-                    if (newAppt.date >= startDate && newAppt.date <= endDate) {
-                        setAppointments(prev => [newAppt, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-                    }
-                    // Trigger Alert
-                    playAlert();
-                    setAlertMessage(`Novo agendamento: ${newAppt.service_name} para ${newAppt.client_name}`);
-                    setTimeout(() => setAlertMessage(null), 5000);
-                }
-            )
-            .on(
-                'postgres_changes',
-                { event: 'UPDATE', schema: 'public', table: 'appointments' },
-                (payload) => {
-                     // Optimistic update for status changes
-                     setAppointments(prev => prev.map(a => a.id === payload.new.id ? payload.new as Appointment : a));
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [startDate, endDate]);
-
-    const metrics = useMemo(() => {
-        const total = appointments.length;
-        const completed = appointments.filter(a => a.status === 'completed' || a.transportStatus === 'present').length;
-        const cancelled = appointments.filter(a => a.status === 'cancelled').length;
-        const noShow = appointments.filter(a => a.transportStatus === 'absent').length; 
-        
-        // Calculate service popularity
-        const serviceCounts: Record<string, number> = {};
-        appointments.forEach(a => {
-            const name = a.service_name.split('(')[0].trim();
-            serviceCounts[name] = (serviceCounts[name] || 0) + 1;
-        });
-        const topServices = Object.entries(serviceCounts)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 5);
-
-        return { total, completed, cancelled, noShow, topServices };
-    }, [appointments]);
-
-    const exportCSV = () => {
-        const headers = ["ID", "Data", "Hora", "Paciente", "Profissional", "Serviço", "Local (Unidade)", "Status", "Transporte", "Valor"];
-        const rows = appointments.map(a => [
-            a.id,
-            a.date,
-            a.time,
-            `"${a.client_name}"`,
-            `"${a.professional_name}"`,
-            `"${a.service_name}"`,
-            `"${a.healthUnit || 'Não informado'}"`,
-            a.status,
-            a.transportStatus || 'N/A',
-            a.price
-        ].join(','));
-
-        const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n" + rows.join('\n');
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `relatorio_siaga_${startDate}_${endDate}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    return (
-        <div className="space-y-6 relative">
-            {/* Alert Notification */}
-            {alertMessage && (
-                <div className="fixed top-24 right-6 bg-teal-600 text-white px-6 py-4 rounded-lg shadow-2xl z-50 flex items-center animate-bounce">
-                    <BellIcon />
-                    <span className="ml-3 font-bold">{alertMessage}</span>
-                </div>
-            )}
-
-            <div className="bg-white p-6 rounded-xl shadow-md">
-                <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                    <h3 className="text-2xl font-bold text-stone-800 flex items-center">
-                        <ChartBarIcon /> <span className="ml-2">Relatórios e Inteligência (BI)</span>
-                    </h3>
-                    <div className="flex flex-col sm:flex-row gap-4 items-center w-full md:w-auto">
-                        <div className="flex items-center gap-2 bg-stone-50 p-2 rounded-lg border border-stone-200">
-                            <span className="text-sm font-semibold text-stone-500">Período:</span>
-                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-white border rounded px-2 py-1 text-sm" />
-                            <span className="text-stone-400">-</span>
-                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-white border rounded px-2 py-1 text-sm" />
-                        </div>
-                        <button onClick={exportCSV} className="flex items-center bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors shadow-sm text-sm whitespace-nowrap">
-                            <DownloadIcon /> Exportar CSV
-                        </button>
-                    </div>
-                </div>
-
-                {loading ? <p className="text-center py-10">Carregando dados...</p> : (
-                    <>
-                        {/* KPI Cards */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                <p className="text-blue-600 font-bold text-sm uppercase">Total Agendamentos</p>
-                                <p className="text-3xl font-extrabold text-blue-800">{metrics.total}</p>
-                            </div>
-                            <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-                                <p className="text-green-600 font-bold text-sm uppercase">Realizados/Confirmados</p>
-                                <p className="text-3xl font-extrabold text-green-800">{metrics.completed}</p>
-                                <p className="text-xs text-green-600 mt-1">{((metrics.completed / (metrics.total || 1)) * 100).toFixed(1)}% taxa de comparecimento</p>
-                            </div>
-                            <div className="bg-red-50 p-4 rounded-lg border border-red-100">
-                                <p className="text-red-600 font-bold text-sm uppercase">Faltas / Absenteísmo</p>
-                                <p className="text-3xl font-extrabold text-red-800">{metrics.noShow}</p>
-                                <p className="text-xs text-red-600 mt-1">Impacto direto na eficiência</p>
-                            </div>
-                            <div className="bg-stone-100 p-4 rounded-lg border border-stone-200">
-                                <p className="text-stone-600 font-bold text-sm uppercase">Cancelamentos</p>
-                                <p className="text-3xl font-extrabold text-stone-800">{metrics.cancelled}</p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                            {/* Top Services Chart (CSS based) */}
-                            <div className="bg-stone-50 p-5 rounded-xl border border-stone-200">
-                                <h4 className="font-bold text-stone-700 mb-4">Serviços Mais Procurados</h4>
-                                <div className="space-y-3">
-                                    {metrics.topServices.map(([name, count], idx) => (
-                                        <div key={name}>
-                                            <div className="flex justify-between text-sm mb-1">
-                                                <span className="font-medium text-stone-700">{idx + 1}. {name}</span>
-                                                <span className="text-stone-500">{count} atendimentos</span>
-                                            </div>
-                                            <div className="w-full bg-stone-200 rounded-full h-2.5">
-                                                <div className="bg-teal-500 h-2.5 rounded-full" style={{ width: `${(count / (metrics.topServices[0][1] || 1)) * 100}%` }}></div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {metrics.topServices.length === 0 && <p className="text-stone-400 text-sm">Sem dados suficientes.</p>}
-                                </div>
-                            </div>
-                            
-                            {/* Recent Activity Log */}
-                            <div className="bg-stone-50 p-5 rounded-xl border border-stone-200 flex flex-col">
-                                <h4 className="font-bold text-stone-700 mb-4">Auditoria Recente</h4>
-                                <div className="overflow-y-auto flex-grow max-h-60 pr-2 space-y-2">
-                                    {appointments.slice(0, 10).map(appt => (
-                                        <div key={appt.id} className="text-sm border-b border-stone-200 pb-2 last:border-0">
-                                            <div className="flex justify-between">
-                                                <span className="font-bold text-stone-700">{appt.client_name}</span>
-                                                <span className="text-stone-500 text-xs">{new Date(appt.date).toLocaleDateString()}</span>
-                                            </div>
-                                            <div className="flex justify-between mt-1">
-                                                <span className="text-stone-600 truncate w-2/3">{appt.service_name}</span>
-                                                <span className={`text-xs px-2 py-0.5 rounded-full ${appt.status === 'completed' ? 'bg-green-100 text-green-700' : appt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                    {appt.status}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Detailed Table */}
-                        <div className="overflow-x-auto border rounded-lg">
-                            <table className="min-w-full divide-y divide-stone-200">
-                                <thead className="bg-stone-100">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Data</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Paciente</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Serviço</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Profissional</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-stone-500 uppercase">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-stone-200">
-                                    {appointments.slice(0, 50).map(appt => (
-                                        <tr key={appt.id} className="hover:bg-stone-50">
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-stone-900">{new Date(appt.date).toLocaleDateString()} <span className="text-stone-400 text-xs">{appt.time}</span></td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-stone-700 font-medium">{appt.client_name}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-stone-600">
-                                                {appt.service_name}
-                                                {appt.healthUnit && <div className="text-xs text-teal-600 mt-0.5">{appt.healthUnit}</div>}
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-stone-600">{appt.professional_name}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                    appt.status === 'completed' ? 'bg-green-100 text-green-800' : 
-                                                    appt.status === 'cancelled' ? 'bg-stone-100 text-stone-800' : 
-                                                    'bg-blue-100 text-blue-800'}`}>
-                                                    {appt.status === 'upcoming' ? 'Agendado' : appt.status}
-                                                </span>
-                                                {appt.transportStatus === 'absent' && <span className="ml-1 text-xs text-red-600 font-bold">(Faltou)</span>}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {appointments.length > 50 && (
-                                <div className="p-3 text-center text-sm text-stone-500 bg-stone-50 border-t">
-                                    Mostrando 50 de {appointments.length} registros. Use "Exportar CSV" para ver tudo.
-                                </div>
-                            )}
-                        </div>
-                    </>
-                )}
-            </div>
-        </div>
-    );
-};
-
-const GlobalAppointments: React.FC = () => {
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    const fetchAppointments = async () => {
-        setLoading(true);
-        const { data } = await supabase.from('appointments').select('*').order('date', { ascending: false }).limit(50);
-        setAppointments(data || []);
-        setLoading(false);
-    };
-    useEffect(() => { fetchAppointments(); }, []);
-
-    const handleExportPDF = () => {
-        generateGeneralReport(appointments, "Últimos 50 Agendamentos");
-    };
-
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-md">
-            <div className="flex justify-between mb-4 items-center">
-                <h3 className="text-xl font-bold text-stone-800">Todos Agendamentos (Recentes)</h3>
-                <div className="flex gap-3">
-                    <button onClick={handleExportPDF} className="text-teal-600 text-sm font-bold border border-teal-600 px-3 py-1 rounded hover:bg-teal-50 flex items-center">
-                        <DocumentDownloadIcon /> <span className="ml-1">PDF</span>
-                    </button>
-                    <button onClick={fetchAppointments} className="text-teal-600 text-sm font-bold hover:underline">Atualizar</button>
-                </div>
-            </div>
-            <div className="overflow-x-auto border rounded-lg">
-                <table className="min-w-full divide-y divide-stone-200">
-                    <thead className="bg-stone-100">
-                        <tr><th className="px-4 py-2 text-left text-xs uppercase font-bold text-stone-500">Data</th><th className="px-4 py-2 text-left text-xs uppercase font-bold text-stone-500">Paciente</th><th className="px-4 py-2 text-left text-xs uppercase font-bold text-stone-500">Serviço/Prof</th><th className="px-4 py-2 text-left text-xs uppercase font-bold text-stone-500">Status</th></tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-stone-200">
-                        {appointments.map(a => (
-                            <tr key={a.id} className="hover:bg-stone-50 text-sm">
-                                <td className="px-4 py-3 whitespace-nowrap">{new Date(a.date).toLocaleDateString()} {a.time}</td>
-                                <td className="px-4 py-3">{a.client_name}</td>
-                                <td className="px-4 py-3">{a.service_name}<br/><span className="text-xs text-stone-500">{a.professional_name}</span></td>
-                                <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${a.status === 'completed' ? 'bg-green-100 text-green-800' : a.status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>{a.status}</span></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
-
 export const AdminDashboard: React.FC<{ user: AdminUser }> = ({ user }) => {
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'professionals' | 'reports'>('overview');
 
     return (
         <div className="container mx-auto px-6 py-8">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-stone-800">Painel Administrativo</h1>
-                <p className="text-stone-500 mt-1">Gestão centralizada do sistema de saúde.</p>
+                <h1 className="text-3xl md:text-4xl font-bold text-stone-800">Painel Administrativo</h1>
+                <p className="text-stone-500 mt-2 text-lg">Bem-vindo(a), {user.name.split(' ')[0]}! Gestão global do sistema.</p>
             </div>
 
-            <div className="flex flex-wrap gap-2 mb-6 border-b border-stone-200 pb-2">
-                {['overview', 'queue', 'trips', 'professionals', 'reports', 'appointments'].map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`px-4 py-2 rounded-lg font-bold text-sm capitalize transition-colors ${
-                            activeTab === tab 
-                            ? 'bg-teal-600 text-white' 
-                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                        }`}
-                    >
-                        {tab === 'overview' ? 'Visão Geral' : 
-                         tab === 'queue' ? 'Filas (Local)' : 
-                         tab === 'trips' ? 'Transporte (TFD)' : 
-                         tab === 'professionals' ? 'Profissionais' : 
-                         tab === 'reports' ? 'Relatórios' : 'Todos Agendamentos'}
-                    </button>
-                ))}
+            <div className="border-b border-stone-200 flex items-center mb-6">
+                <button 
+                    onClick={() => setActiveTab('overview')}
+                    className={`flex items-center px-6 py-3 font-semibold transition-colors ${activeTab === 'overview' ? 'border-b-2 border-teal-600 text-teal-600' : 'text-stone-500 hover:text-stone-800'}`}
+                >
+                    <ChartBarIcon /> <span className="ml-2">Visão Geral</span>
+                </button>
+                <button 
+                    onClick={() => setActiveTab('professionals')}
+                    className={`flex items-center px-6 py-3 font-semibold transition-colors ${activeTab === 'professionals' ? 'border-b-2 border-teal-600 text-teal-600' : 'text-stone-500 hover:text-stone-800'}`}
+                >
+                    <UsersIcon /> <span className="ml-2">Profissionais</span>
+                </button>
+                <button 
+                    onClick={() => setActiveTab('reports')}
+                    className={`flex items-center px-6 py-3 font-semibold transition-colors ${activeTab === 'reports' ? 'border-b-2 border-teal-600 text-teal-600' : 'text-stone-500 hover:text-stone-800'}`}
+                >
+                    <ClipboardListIcon /> <span className="ml-2">Relatórios BI</span>
+                </button>
             </div>
 
-            <div className="bg-stone-50 rounded-xl min-h-[500px]">
-                {activeTab === 'overview' && <DashboardOverview />}
-                {activeTab === 'queue' && <LocalQueueManagement />}
-                {activeTab === 'trips' && <TripManagement />}
-                {activeTab === 'professionals' && <ProfessionalManagement />}
-                {activeTab === 'reports' && <ReportsAnalytics />}
-                {activeTab === 'appointments' && <GlobalAppointments />}
-            </div>
+            {activeTab === 'overview' && <DashboardOverview />}
+            {activeTab === 'professionals' && <ProfessionalManagement />}
+            {activeTab === 'reports' && <ReportsAnalytics />}
         </div>
     );
 };

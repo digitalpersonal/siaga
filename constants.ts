@@ -1,5 +1,5 @@
 
-import type { Service, Plan } from './types';
+import type { Service, Plan, HealthUnit } from './types';
 
 // Category 1: Consultas Médicas
 export const medicalServices: Service[] = [
@@ -40,17 +40,20 @@ export const examServices: Service[] = [
     { id: 'e6', name: 'Tomografia Computadorizada', duration: 45, price: 0, locationType: 'external', destinationCity: 'São Sebastião do Paraíso' },
 ];
 
-// Health Units in the Municipality (Local)
-export const HEALTH_UNITS = [
-    "UBS Centro (Postão)",
-    "PSF Vila Nova",
-    "PSF Prata",
-    "PSF Santa Bárbara",
-    "PSF Bom Jesus",
-    "Policlínica Municipal",
-    "CAPS - Centro de Atenção Psicossocial",
-    "Laboratório Municipal"
+// Health Units Data with Contact Info
+export const HEALTH_UNIT_DATA: HealthUnit[] = [
+    { id: 'u1', name: "UBS Centro (Postão)", whatsapp: "35999990001", type: 'ubs' },
+    { id: 'u2', name: "PSF Vila Nova", whatsapp: "35999990002", type: 'ubs' },
+    { id: 'u3', name: "PSF Prata", whatsapp: "35999990003", type: 'ubs' },
+    { id: 'u4', name: "PSF Santa Bárbara", whatsapp: "35999990004", type: 'ubs' },
+    { id: 'u5', name: "PSF Bom Jesus", whatsapp: "35999990005", type: 'ubs' },
+    { id: 'u6', name: "Policlínica Municipal", whatsapp: "35999990006", type: 'specialty_center' },
+    { id: 'u7', name: "CAPS - Centro de Atenção Psicossocial", whatsapp: "35999990007", type: 'caps' },
+    { id: 'u8', name: "Laboratório Municipal", whatsapp: "35999990008", type: 'lab' }
 ];
+
+// Exporting simple string array for backward compatibility with dropdowns
+export const HEALTH_UNITS = HEALTH_UNIT_DATA.map(u => u.name);
 
 // External Facilities mapped by City
 export const EXTERNAL_FACILITIES: { [city: string]: string[] } = {

@@ -6,6 +6,34 @@ interface AuthModalProps {
     onClose: () => void;
 }
 
+// --- Mask Helpers ---
+const maskPhone = (value: string) => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/^(\d{2})(\d)/g, '($1) $2')
+    .replace(/(\d)(\d{4})$/, '$1-$2')
+    .slice(0, 15);
+};
+
+const maskCPF = (value: string) => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+    .replace(/(-\d{2})\d+?$/, '$1');
+};
+
+const maskSUS = (value: string) => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{3})(\d)/, '$1 $2')
+    .replace(/(\d{4})(\d)/, '$1 $2')
+    .replace(/(\d{4})(\d)/, '$1 $2')
+    .slice(0, 18); // 15 digits + spaces
+};
+
+// --- Icons ---
 const XIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -54,6 +82,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
     const [showPassword, setShowPassword] = useState(false);
     const [name, setName] = useState('');
     
+    // New Document Fields
+    const [cpf, setCpf] = useState('');
+    const [rg, setRg] = useState('');
+    const [birthDate, setBirthDate] = useState('');
+    const [motherName, setMotherName] = useState('');
+    const [susCardNumber, setSusCardNumber] = useState('');
+
     // Address Split States
     const [street, setStreet] = useState('');
     const [number, setNumber] = useState('');
@@ -78,6 +113,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
     const startCamera = async () => {
         setCameraActive(true);
         setError(null);
+        setCapturedImage(null); // Clear previous image
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: "user", width: 400, height: 400 } 
@@ -109,7 +145,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
                 if (videoRef.current && canvasRef.current) {
                     const context = canvasRef.current.getContext('2d');
                     if (context) {
-                        context.drawImage(videoRef.current, 0, 0, 300, 300);
+                        // Ensure canvas dimensions match video for full capture
+                        canvasRef.current.width = videoRef.current.videoWidth;
+                        canvasRef.current.height = videoRef.current.videoHeight;
+                        context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
                         const imageDataUrl = canvasRef.current.toDataURL('image/jpeg');
                         setCapturedImage(imageDataUrl);
                         stopCamera();
@@ -159,12 +198,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
         
         const email = getSyntheticEmail(phone);
         const cleanPhone = phone.replace(/\D/g, '');
-        let avatarUrl = `https://i.pravatar.cc/150?u=${email}`;
+        let avatarUrl = `https://i.pravatar.cc/150?u=${email}`; // Fallback default avatar
 
         // Upload Biometric Photo if available
         if (capturedImage) {
             try {
                 const res = await fetch(capturedImage);
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                 const blob = await res.blob();
                 const fileName = `${cleanPhone}_biometric.jpg`;
                 
@@ -172,19 +212,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
                     .from('avatars')
                     .upload(fileName, blob, { upsert: true });
 
-                if (!uploadError) {
-                    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-                    if (urlData.publicUrl) avatarUrl = urlData.publicUrl;
+                if (uploadError) {
+                    console.error("Supabase Upload Error:", uploadError);
+                    throw new Error(`Erro no upload da imagem: ${uploadError.message}`);
                 }
-            } catch (e) {
-                console.error("Erro upload biometria", e);
+
+                const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+                
+                if (!urlData.publicUrl) {
+                    console.error("Supabase Public URL Error: URL pública não gerada.");
+                    throw new Error("URL pública não foi gerada.");
+                }
+                
+                avatarUrl = urlData.publicUrl;
+
+            } catch (e: any) {
+                console.error("Detailed Biometric Upload Error:", e);
+                setError(`Erro ao processar/enviar biometria: ${e.message}`);
+                setLoading(false);
+                return;
             }
         }
 
         // Concatenate separate fields into full address
         const fullAddress = `${street}, Nº ${number} - ${neighborhood} - CEP: 37810-000`;
 
-        const { error } = await supabase.auth.signUp({
+        const { error: signUpError } = await supabase.auth.signUp({
             email,
             password,
             options: {
@@ -194,12 +247,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
                     whatsapp: cleanPhone,
                     address: fullAddress, // Saved with fixed CEP and format
                     imageUrl: avatarUrl,
+                    // New Fields
+                    cpf: cpf.replace(/\D/g, ''),
+                    rg: rg,
+                    birthDate: birthDate,
+                    motherName: motherName,
+                    susCardNumber: susCardNumber.replace(/\D/g, '')
                 },
             },
         });
 
-        if (error) {
-            setError(error.message);
+        if (signUpError) {
+            console.error("Supabase Signup Error:", signUpError);
+            setError(signUpError.message);
         } else {
             alert('Cadastro realizado com sucesso! Use seu número e senha para entrar.');
             onClose();
@@ -211,8 +271,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
         e.preventDefault();
         
         if (activeTab === 'signup') {
-            if (!phone || !password || !name || !street || !number || !neighborhood) {
-                setError("Preencha todos os campos obrigatórios.");
+            if (!phone || !password || !name || !street || !number || !neighborhood || !cpf || !birthDate || !motherName) {
+                setError("Preencha todos os campos obrigatórios (*).");
+                return;
+            }
+            if (cpf.replace(/\D/g, '').length !== 11) { // Check for 11 digits after masking
+                setError("CPF inválido. Por favor, insira 11 dígitos.");
                 return;
             }
             // Always require biometrics for public signup
@@ -230,10 +294,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
         setStep('form');
         setError(null);
         setCapturedImage(null);
-        // Clear address fields
-        setStreet('');
-        setNumber('');
-        setNeighborhood('');
         stopCamera();
     };
 
@@ -275,7 +335,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
             {!capturedImage ? (
                 <button 
                     onClick={handleCapture}
-                    disabled={scanning}
+                    disabled={scanning || !cameraActive}
                     className="flex items-center bg-teal-600 text-white font-bold py-3 px-8 rounded-full hover:bg-teal-700 transition-all transform hover:scale-105 shadow-lg"
                 >
                     {scanning ? 'Capturando...' : (
@@ -306,14 +366,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
 
     return (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 relative overflow-hidden">
+            <div className={`bg-white rounded-2xl shadow-2xl w-full ${activeTab === 'signup' ? 'max-w-xl' : 'max-w-sm'} p-8 relative overflow-hidden flex flex-col max-h-[90vh]`}>
                 <button onClick={() => { stopCamera(); onClose(); }} aria-label="Fechar" className="absolute top-4 right-4 text-stone-500 hover:text-stone-800 transition-colors z-20">
                     <XIcon />
                 </button>
                 
                 {step === 'form' && (
                     <>
-                        <div className="flex border-b mb-6">
+                        <div className="flex border-b mb-6 flex-shrink-0">
                             <button 
                                 onClick={() => switchTab('login')}
                                 className={`w-1/2 py-3 font-semibold text-center transition-colors ${activeTab === 'login' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-stone-500'}`}
@@ -328,19 +388,61 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
                             </button>
                         </div>
 
-                        {error && <p className="text-red-500 text-sm text-center mb-4 bg-red-50 p-2 rounded border border-red-200">{error}</p>}
+                        {error && <p className="text-red-500 text-sm text-center mb-4 bg-red-50 p-2 rounded border border-red-200 flex-shrink-0">{error}</p>}
 
-                        <form onSubmit={handleNextStep}>
+                        <form onSubmit={handleNextStep} className="overflow-y-auto pr-2">
                             {activeTab === 'signup' && (
-                                <>
-                                    <div className="mb-4">
-                                        <label className="block text-stone-600 mb-1 text-sm font-semibold" htmlFor="name">Nome Completo</label>
+                                <div className="space-y-4 mb-4">
+                                    {/* Personal Info */}
+                                    <div>
+                                        <label className="block text-stone-600 mb-1 text-sm font-semibold" htmlFor="name">Nome Completo *</label>
                                         <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300" placeholder="Ex: Maria Silva" />
                                     </div>
-                                    <div className="mb-4">
-                                        <label className="block text-stone-600 mb-1 text-sm font-semibold">Endereço Residencial</label>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-stone-600 mb-1 text-sm font-semibold">Data Nasc. *</label>
+                                            <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-stone-600 mb-1 text-sm font-semibold">CPF *</label>
+                                            <input 
+                                                type="text" 
+                                                value={cpf} 
+                                                onChange={e => setCpf(maskCPF(e.target.value))} 
+                                                placeholder="000.000.000-00" 
+                                                maxLength={14}
+                                                className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300" 
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-stone-600 mb-1 text-sm font-semibold">RG</label>
+                                            <input type="text" value={rg} onChange={e => setRg(e.target.value)} placeholder="00.000.000" className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-stone-600 mb-1 text-sm font-semibold">Cartão SUS</label>
+                                            <input 
+                                                type="text" 
+                                                value={susCardNumber} 
+                                                onChange={e => setSusCardNumber(maskSUS(e.target.value))} 
+                                                placeholder="000 0000 0000 0000" 
+                                                maxLength={18}
+                                                className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300" 
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-stone-600 mb-1 text-sm font-semibold">Nome da Mãe *</label>
+                                        <input type="text" value={motherName} onChange={e => setMotherName(e.target.value)} placeholder="Nome completo da mãe" className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                                    </div>
+
+                                    <div className="border-t pt-4">
+                                        <label className="block text-stone-600 mb-1 text-sm font-semibold">Endereço Residencial (Guaranésia) *</label>
                                         
-                                        {/* Rua */}
                                         <input 
                                             type="text" 
                                             value={street} 
@@ -349,7 +451,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
                                             placeholder="Rua / Logradouro" 
                                         />
                                         
-                                        {/* Número e Bairro */}
                                         <div className="flex gap-2 mb-2">
                                             <input 
                                                 type="text" 
@@ -366,33 +467,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
                                                 placeholder="Bairro" 
                                             />
                                         </div>
-
-                                        {/* CEP Fixo */}
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                disabled
-                                                value="37810-000"
-                                                className="w-full px-4 py-2 border border-stone-200 bg-stone-100 text-stone-500 rounded-lg font-medium cursor-not-allowed text-sm"
-                                            />
-                                            <p className="text-xs text-stone-400 mt-1 absolute right-2 top-2.5">CEP Fixo</p>
-                                        </div>
                                     </div>
-                                </>
+                                </div>
                             )}
                              <div className="mb-4">
-                                <label className="block text-stone-600 mb-1 text-sm font-semibold" htmlFor="phone">Celular (WhatsApp)</label>
+                                <label className="block text-stone-600 mb-1 text-sm font-semibold" htmlFor="phone">Celular (WhatsApp) *</label>
                                 <input 
                                     type="tel" 
                                     id="phone" 
                                     value={phone} 
-                                    onChange={e => setPhone(e.target.value)} 
+                                    onChange={e => setPhone(maskPhone(e.target.value))} 
+                                    maxLength={15}
                                     className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300" 
-                                    placeholder="Ex: 35999999999" 
+                                    placeholder="(35) 99999-9999" 
                                 />
                             </div>
                              <div className="mb-6">
-                                <label className="block text-stone-600 mb-1 text-sm font-semibold" htmlFor="password">Senha</label>
+                                <label className="block text-stone-600 mb-1 text-sm font-semibold" htmlFor="password">Senha *</label>
                                 <div className="relative">
                                     <input type={showPassword ? 'text' : 'password'} id="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300" />
                                     <button
@@ -406,14 +497,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
                                 </div>
                             </div>
                             
-                            <div className="space-y-3">
+                            <div className="space-y-3 pb-2">
                                 {activeTab === 'signup' ? (
-                                    <button type="submit" className="w-full bg-teal-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors duration-300 flex justify-center items-center">
+                                    <button type="submit" className="w-full bg-teal-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors duration-300 flex justify-center items-center shadow-md">
                                         <FaceIdIcon />
                                         <span className="ml-2">Continuar para Biometria</span>
                                     </button>
                                 ) : (
-                                    <button type="submit" disabled={loading} className="w-full bg-stone-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-stone-900 transition-colors duration-300 disabled:opacity-50 flex items-center justify-center">
+                                    <button type="submit" disabled={loading} className="w-full bg-stone-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-stone-900 transition-colors duration-300 disabled:opacity-50 flex items-center justify-center shadow-md">
                                         {loading ? 'Acessando...' : (
                                             <>
                                                 <LockClosedIcon />

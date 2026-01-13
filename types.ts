@@ -13,17 +13,30 @@ export interface Specialty {
   price: number;
 }
 
+export interface WorkSchedule {
+  unitId: string;
+  unitName: string;
+  workDays: number[]; // 0=Dom, 1=Seg, ...
+  start: string; // "08:00"
+  end: string;   // "12:00"
+}
+
 export interface ProfessionalSettings {
-  workHours: { 
+  // Legacy fields (kept for type safety, but logic will move to 'schedule')
+  workHours?: { 
     start: string; 
     end: string; 
-    lunchStart: string; // Fim do expediente da manhã
-    lunchEnd: string;   // Início do expediente da tarde
+    lunchStart: string; 
+    lunchEnd: string;   
   };
-  workDays: number[]; // 0 for Sunday, 1 for Monday, etc.
+  workDays?: number[]; 
+  assignedUnit?: string; 
+  
+  // New Multi-Unit Schedule
+  schedule: WorkSchedule[]; 
+  
   blockedDays: string[]; // YYYY-MM-DD
   blockedTimeSlots: { [date: string]: string[] };
-  assignedUnit?: string; // Moved here from top level
 }
 
 export interface Professional {
@@ -61,6 +74,13 @@ export interface User {
   role: 'client' | 'professional' | 'admin' | 'attendant' | 'driver';
   whatsapp?: string;
   address?: string;
+  susCardNumber?: string;
+  permanentCompanion?: string;
+  // Novos campos cadastrais completos
+  cpf?: string;
+  rg?: string;
+  birthDate?: string; // YYYY-MM-DD
+  motherName?: string;
 }
 
 export interface ProfessionalUser extends User {
@@ -96,9 +116,9 @@ export interface Vehicle {
 export interface HealthUnit {
   id: string;
   name: string; // Ex: UBS Centro
-  address: string;
-  phone?: string;
-  type: 'ubs' | 'hospital' | 'caps' | 'specialty_center';
+  address?: string;
+  whatsapp: string; // Contato oficial da unidade
+  type: 'ubs' | 'hospital' | 'caps' | 'specialty_center' | 'lab';
 }
 
 export interface DestinationCity {

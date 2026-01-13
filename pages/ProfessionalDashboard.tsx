@@ -1,9 +1,11 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { ProfessionalUser, Appointment, Service, Specialty } from '../types';
 import { supabase, getInitials, getColor } from '../utils/supabase';
 import { ProfessionalCalendar } from '../components/ProfessionalCalendar';
 import { QuickBookModal } from '../components/QuickBookModal';
-import { generateDailyAgenda } from '../utils/pdfGenerator';
+import { DayDetailPanel } from '../components/DayDetailPanel';
+import { AppointmentHistory } from '../components/AppointmentHistory';
 
 export interface ProfessionalDashboardProps {
     user: ProfessionalUser;
@@ -14,7 +16,6 @@ export interface ProfessionalDashboardProps {
 const CalendarIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
 );
-const PrinterIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>;
 const CogIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066 2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
 );
@@ -29,14 +30,8 @@ const ArchiveIcon = () => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
     </svg>
 );
-const DogIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-stone-500 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 5.2a2 2 0 0 1 2-2.2h.4a2 2 0 0 1 2 2.2v.3a2 2 0 0 1-2 2.2h-.4a2 2 0 0 1-2-2.2v-.3Z"></path><path d="M9.5 14.5A2.5 2.5 0 0 1 7 12V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3a2.5 2.5 0 0 1-2.5 2.5h-3Z"></path><path d="M11 14v3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-3"></path><path d="M10 14h.01"></path><path d="M14 14h.01"></path><path d="M7 17v-2.3a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2V17"></path><path d="M5 14a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1"></path><path d="M19 14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1"></path></svg>;
 const PlusCircleIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-);
-const BlockedIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-    </svg>
 );
 const TrashIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -50,12 +45,12 @@ const ShareIcon = () => (
 );
 const CopyIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 00-2-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
     </svg>
 );
 const ChartBarIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
     </svg>
 );
 const DownloadIcon = () => (
@@ -63,181 +58,6 @@ const DownloadIcon = () => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
     </svg>
 );
-
-const AppointmentNoteEditor: React.FC<{
-    appointment: Appointment;
-    onUpdate: (updatedAppointment: Appointment) => void;
-}> = ({ appointment, onUpdate }) => {
-    const [notes, setNotes] = useState(appointment.notes || '');
-    const [isSaving, setIsSaving] = useState(false);
-    
-    const handleSave = async () => {
-        if (notes === (appointment.notes || '')) return;
-        setIsSaving(true);
-        const { data, error } = await supabase
-            .from('appointments')
-            .update({ notes })
-            .eq('id', appointment.id)
-            .select()
-            .single();
-
-        if (error) {
-            alert('Erro ao salvar anotação.');
-            console.error(error);
-        } else if (data) {
-            onUpdate(data);
-        }
-        setIsSaving(false);
-    };
-
-    return (
-        <div className="mt-3 border-t pt-3">
-            <label className="text-xs font-semibold text-stone-600">Anotações</label>
-            <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Adicionar anotações sobre o cidadão ou serviço..."
-                className="w-full p-2 border border-stone-200 rounded-md text-sm mt-1 focus:ring-1 focus:ring-teal-400 focus:outline-none"
-                rows={2}
-            />
-            <button
-                onClick={handleSave}
-                disabled={isSaving || notes === (appointment.notes || '')}
-                className="mt-1 text-xs bg-stone-200 text-stone-700 font-semibold py-1 px-3 rounded-md hover:bg-stone-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-                {isSaving ? 'Salvando...' : 'Salvar Anotação'}
-            </button>
-        </div>
-    );
-};
-
-const DayDetailPanel: React.FC<{
-    selectedDate: Date;
-    appointments: Appointment[];
-    settings: ProfessionalUser['settings'];
-    professionalName: string;
-    onClose: () => void;
-    onAppointmentUpdate: (updatedAppointment: Appointment) => void;
-}> = ({ selectedDate, appointments, settings, professionalName, onClose, onAppointmentUpdate }) => {
-    
-    const [loadingAction, setLoadingAction] = useState<string | null>(null);
-
-    const handleUpdateStatus = async (appointmentId: string, status: 'completed' | 'cancelled') => {
-        if (status === 'cancelled' && !window.confirm('Tem certeza que deseja cancelar este agendamento?')) return;
-        
-        setLoadingAction(appointmentId);
-        const { data, error } = await supabase
-            .from('appointments')
-            .update({ status })
-            .eq('id', appointmentId)
-            .select()
-            .single();
-
-        if (error) {
-            alert(`Erro ao ${status === 'completed' ? 'finalizar' : 'cancelar'} o agendamento.`);
-            console.error(error);
-        } else if (data) {
-            onAppointmentUpdate(data);
-        }
-        setLoadingAction(null);
-    };
-
-    const handlePrintAgenda = () => {
-        generateDailyAgenda(professionalName, selectedDate, appointments.sort((a,b) => a.time.localeCompare(b.time)));
-    };
-
-    const timeSlots = useMemo(() => {
-        const slots = [];
-        if (!settings.workHours) return [];
-        const start = parseInt(settings.workHours.start.split(':')[0]);
-        const end = parseInt(settings.workHours.end.split(':')[0]);
-        for (let i = start; i < end; i++) {
-            slots.push(`${String(i).padStart(2, '0')}:00`);
-            slots.push(`${String(i).padStart(2, '0')}:30`);
-        }
-        return slots;
-    }, [settings.workHours]);
-
-    const getAppointmentForSlot = (time: string) => {
-        return appointments.find(a => a.time.startsWith(time.substring(0, 5))); // Match HH:MM
-    };
-
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-lg border w-full lg:w-1/3 animate-fade-in-right">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-stone-800">
-                    {selectedDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                </h3>
-                <button onClick={onClose} aria-label="Fechar painel de detalhes do dia" className="text-stone-500 hover:text-stone-800 p-1 rounded-full hover:bg-stone-100 transition-colors text-2xl font-bold leading-none">&times;</button>
-            </div>
-            
-            <button 
-                onClick={handlePrintAgenda}
-                className="w-full mb-4 bg-stone-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center hover:bg-stone-800 transition-colors shadow-sm"
-            >
-                <PrinterIcon /> <span className="ml-2">Imprimir Agenda do Dia</span>
-            </button>
-
-            <div className="bg-stone-50 p-3 rounded-lg text-center mb-4">
-                <p className="font-semibold text-stone-700">
-                    {appointments.length > 0
-                        ? `Você tem ${appointments.length} agendamento(s) para este dia.`
-                        : "Nenhum agendamento para este dia."}
-                </p>
-            </div>
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
-                {timeSlots.map(time => {
-                    const appointment = getAppointmentForSlot(time);
-                    const isBlocked = settings.blockedTimeSlots && settings.blockedTimeSlots[selectedDate.toISOString().split('T')[0]]?.includes(time);
-                    
-                    if (appointment) {
-                        return (
-                             <div key={time} className="bg-teal-50 border-l-4 border-teal-500 p-3 rounded-r-lg">
-                                <p className="font-semibold text-teal-800">{time} - {appointment.service_name}</p>
-                                <p className="text-sm text-teal-700">Cidadão: {appointment.client_name}</p>
-                                {appointment.pet_name && (
-                                    <p className="text-sm text-teal-600 flex items-center"><DogIcon /> {appointment.pet_name} ({appointment.pet_breed})</p>
-                                )}
-                                <AppointmentNoteEditor appointment={appointment} onUpdate={onAppointmentUpdate} />
-                                {appointment.status === 'upcoming' && (
-                                    <div className="flex gap-2 mt-2 border-t pt-2">
-                                        <button
-                                            onClick={() => handleUpdateStatus(appointment.id, 'cancelled')}
-                                            disabled={loadingAction === appointment.id}
-                                            className="text-xs font-semibold py-1 px-3 rounded-md bg-stone-200 text-stone-700 hover:bg-stone-300 transition-colors disabled:opacity-50"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            onClick={() => handleUpdateStatus(appointment.id, 'completed')}
-                                            disabled={loadingAction === appointment.id}
-                                            className="text-xs font-semibold py-1 px-3 rounded-md bg-green-500 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
-                                        >
-                                            Finalizar
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )
-                    }
-                    if (isBlocked) {
-                         return (
-                            <div key={time} className="bg-stone-100 border-l-4 border-stone-300 p-3 rounded-r-lg flex items-center">
-                                <BlockedIcon />
-                                <span className="text-stone-500 line-through">{time} - Horário Bloqueado</span>
-                            </div>
-                        )
-                    }
-                    return (
-                        <div key={time} className="flex justify-between items-center bg-white p-3 rounded-lg hover:bg-stone-50">
-                            <span className="text-stone-600">{time} - Disponível</span>
-                        </div>
-                    )
-                })}
-            </div>
-        </div>
-    );
-};
 
 const ServiceEditor: React.FC<{ services: Service[]; userId: string; onServicesUpdate: (services: Service[]) => void; }> = ({ services, userId, onServicesUpdate }) => {
     const [localServices, setLocalServices] = useState(services || []);
@@ -362,6 +182,7 @@ const ServiceEditor: React.FC<{ services: Service[]; userId: string; onServicesU
         </div>
     );
 };
+
 
 const AvailabilityManager: React.FC<{ 
     user: ProfessionalUser,
@@ -783,126 +604,6 @@ const ProfileSettings: React.FC<{
     );
 };
 
-const AppointmentHistory: React.FC<{
-    appointments: Appointment[];
-    onUpdate: (updatedAppointment: Appointment) => void;
-}> = ({ appointments, onUpdate }) => {
-    const [filter, setFilter] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
-    const [loadingAction, setLoadingAction] = useState<string | null>(null);
-
-    const handleUpdateStatus = async (appointmentId: string, status: 'completed' | 'cancelled') => {
-        if (status === 'cancelled' && !window.confirm('Tem certeza que deseja cancelar este agendamento?')) return;
-        
-        setLoadingAction(appointmentId);
-        const { data, error } = await supabase
-            .from('appointments')
-            .update({ status })
-            .eq('id', appointmentId)
-            .select()
-            .single();
-
-        if (error) {
-            alert(`Erro ao ${status === 'completed' ? 'finalizar' : 'cancelar'} o agendamento.`);
-            console.error(error);
-        } else if (data) {
-            onUpdate(data);
-        }
-        setLoadingAction(null);
-    };
-
-    const filteredAppointments = useMemo(() => {
-        return appointments
-            .filter(appt => appt.status === filter)
-            .sort((a, b) => new Date(`${b.date}T${b.time}`).getTime() - new Date(`${a.date}T${a.time}`).getTime());
-    }, [appointments, filter]);
-
-    const HistoryCard: React.FC<{ appointment: Appointment }> = ({ appointment }) => (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4 flex flex-col sm:flex-row items-start gap-4 transition-all hover:shadow-md">
-            <div className="flex-grow">
-                <h4 className="font-bold text-stone-800">{appointment.service_name}</h4>
-                <p className="text-sm text-stone-600">Cidadão: {appointment.client_name}</p>
-                <p className="text-sm text-stone-500 mt-1 flex items-center">
-                    <span className="mr-1">📅</span>
-                    {new Date(appointment.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} às {appointment.time}
-                </p>
-                {appointment.notes && <p className="text-xs text-stone-500 mt-2 italic border-l-2 border-stone-300 pl-2">Nota: {appointment.notes}</p>}
-            </div>
-            <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
-                 <p className="font-bold text-lg text-teal-600">{appointment.price === 0 ? 'Gratuito' : `R$ ${appointment.price.toFixed(2)}`}</p>
-                 
-                {appointment.status === 'upcoming' && (
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => handleUpdateStatus(appointment.id, 'cancelled')}
-                            disabled={loadingAction === appointment.id}
-                            className="text-xs font-semibold py-1 px-3 rounded-md bg-stone-200 text-stone-700 hover:bg-red-100 hover:text-red-700 transition-colors disabled:opacity-50"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            onClick={() => handleUpdateStatus(appointment.id, 'completed')}
-                            disabled={loadingAction === appointment.id}
-                            className="text-xs font-semibold py-1 px-3 rounded-md bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:opacity-50 shadow-sm"
-                        >
-                            Finalizar
-                        </button>
-                    </div>
-                )}
-                 {appointment.status !== 'upcoming' && (
-                     <span className={`text-xs font-semibold px-2 py-1 rounded-full ${appointment.status === 'completed' ? 'bg-teal-100 text-teal-800' : 'bg-red-100 text-red-800'}`}>
-                         {appointment.status === 'completed' ? 'Concluído' : 'Cancelado'}
-                     </span>
-                 )}
-            </div>
-        </div>
-    );
-
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-md border border-stone-100">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-                 <h3 className="text-2xl font-bold text-stone-800 mb-4 md:mb-0">Histórico de Atendimentos</h3>
-                 <div className="flex bg-stone-100 p-1 rounded-lg">
-                    {(['upcoming', 'completed', 'cancelled'] as const).map((status) => (
-                        <button
-                            key={status}
-                            onClick={() => setFilter(status)}
-                            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all duration-200 ${
-                                filter === status 
-                                    ? 'bg-white text-teal-700 shadow-sm' 
-                                    : 'text-stone-500 hover:text-stone-700'
-                            }`}
-                        >
-                            {status === 'upcoming' ? 'Agendados' : status === 'completed' ? 'Realizados' : 'Cancelados'}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {filteredAppointments.length > 0 ? (
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                    {filteredAppointments.map(appt => <HistoryCard key={appt.id} appointment={appt} />)}
-                </div>
-            ) : (
-                <div className="text-center py-12 bg-stone-50 rounded-lg border border-dashed border-stone-300">
-                    <p className="text-stone-500 font-medium">Nenhum atendimento encontrado nesta categoria.</p>
-                </div>
-            )}
-            <style>{`
-                .custom-scrollbar::-webkit-scrollbar {
-                    width: 6px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-track {
-                    background: #f5f5f4;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background-color: #d6d3d1;
-                    border-radius: 20px;
-                }
-            `}</style>
-        </div>
-    );
-};
-
 const ProfessionalReports: React.FC<{
     appointments: Appointment[];
 }> = ({ appointments }) => {
@@ -1029,6 +730,7 @@ const ProfessionalReports: React.FC<{
         </div>
     );
 };
+
 
 type Tab = 'agenda' | 'history' | 'services' | 'availability' | 'settings' | 'reports';
 
@@ -1159,7 +861,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ us
                                     selectedDate={selectedDate}
                                     appointments={appointmentsForSelectedDate}
                                     settings={localUser.settings}
-                                    professionalName={localUser.name}
+                                    professionalName={localUser.name} // Pass name for PDF
                                     onClose={() => setSelectedDate(null)}
                                     onAppointmentUpdate={handleAppointmentUpdate}
                                 />
@@ -1185,6 +887,16 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ us
                 />
             )}
             <style>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: #f5f5f4;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background-color: #d6d3d1;
+                    border-radius: 10px;
+                }
                 @keyframes fade-in-right {
                     from {
                         opacity: 0;

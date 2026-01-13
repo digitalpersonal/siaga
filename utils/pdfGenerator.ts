@@ -51,7 +51,8 @@ const addHeader = (doc: jsPDF, title: string, subtitle?: string) => {
 
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - 10, 20, { align: "right" });
+    // Date only on top right if strictly needed, usually signature date allows manual input or bottom
+    // doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - 10, 20, { align: "right" });
 
     return 55; // Retorna a posição Y onde o conteúdo deve começar
 };
@@ -61,7 +62,8 @@ const addFooter = (doc: jsPDF) => {
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setFontSize(8);
-        doc.text(`Página ${i} de ${pageCount} - Documento Oficial SIAGA`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: "center" });
+        doc.text(`Sistema SIAGA - Documento emitido eletronicamente.`, 14, doc.internal.pageSize.height - 10);
+        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 20, doc.internal.pageSize.height - 10, { align: "right" });
     }
 };
 
@@ -174,4 +176,46 @@ export const generateDailyAgenda = (professionalName: string, date: Date, appoin
 
     addFooter(doc);
     doc.save(`agenda_${professionalName.replace(/\s+/g, '_')}_${dateStr.replace(/\//g, '-')}.pdf`);
+};
+
+// 4. Receituário e Atestado
+export const generatePrescription = (
+    type: 'Receita Médica' | 'Atestado Médico',
+    professionalName: string,
+    patientName: string,
+    content: string,
+    date: Date = new Date()
+) => {
+    const doc = new jsPDF();
+    const startY = addHeader(doc, type.toUpperCase());
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+
+    // Info do Paciente
+    doc.text(`Paciente: ${patientName}`, 20, startY + 10);
+    doc.text(`Data: ${date.toLocaleDateString('pt-BR')}`, 150, startY + 10);
+    
+    doc.setLineWidth(0.5);
+    doc.line(20, startY + 15, 190, startY + 15);
+
+    // Conteúdo
+    doc.setFontSize(12);
+    // Split text to fit page width
+    const splitText = doc.splitTextToSize(content, 170);
+    doc.text(splitText, 20, startY + 25);
+
+    // Assinatura
+    const pageHeight = doc.internal.pageSize.height;
+    const signatureY = pageHeight - 40;
+
+    doc.setLineWidth(0.5);
+    doc.line(60, signatureY, 150, signatureY);
+    doc.setFontSize(10);
+    doc.text(professionalName, 105, signatureY + 5, { align: "center" });
+    doc.setFontSize(8);
+    doc.text("Assinatura e Carimbo", 105, signatureY + 10, { align: "center" });
+
+    addFooter(doc);
+    doc.save(`${type.toLowerCase().split(' ')[0]}_${patientName.replace(/\s+/g, '_')}.pdf`);
 };

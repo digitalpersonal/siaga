@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
 const PhoneIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2">
@@ -18,31 +18,6 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ onSysAdminClick }) => {
-    const [clickCount, setClickCount] = useState(0);
-
-    // Resetar o contador se o usuário parar de clicar por 1 segundo
-    useEffect(() => {
-        let timer: ReturnType<typeof setTimeout>;
-        if (clickCount > 0) {
-            timer = setTimeout(() => {
-                setClickCount(0);
-            }, 1000);
-        }
-        return () => clearTimeout(timer);
-    }, [clickCount]);
-
-    const handleSecretClick = () => {
-        if (!onSysAdminClick) return;
-        
-        const newCount = clickCount + 1;
-        setClickCount(newCount);
-
-        if (newCount === 5) {
-            onSysAdminClick();
-            setClickCount(0);
-        }
-    };
-
     return (
         <footer id="footer" className="bg-stone-900 text-white">
             <div className="container mx-auto px-6 py-12">
@@ -77,11 +52,11 @@ export const Footer: React.FC<FooterProps> = ({ onSysAdminClick }) => {
                         © {new Date().getFullYear()} Guaranésia e Região | SIAGA Saúde v2.1 - Tecnologia a favor da vida
                     </p>
                     
-                    {/* Botão Discreto para Admin Geral (Requer 5 cliques) */}
+                    {/* Botão Discreto para Admin Geral */}
                     {onSysAdminClick && (
                         <button 
-                            onClick={handleSecretClick} 
-                            className={`mt-2 md:mt-0 text-stone-700 hover:text-stone-500 transition-colors p-2 rounded-full opacity-50 hover:opacity-100 ${clickCount > 0 ? 'text-stone-500' : ''}`}
+                            onClick={onSysAdminClick} 
+                            className="mt-2 md:mt-0 text-stone-700 hover:text-stone-500 transition-colors p-2 rounded-full opacity-50 hover:opacity-100"
                             aria-label="Acesso Administrativo do Sistema"
                             title="Acesso Mantenedor"
                         >
